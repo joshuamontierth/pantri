@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set nav = "catalog" %}
+{% block title %}Catalog · {{ household.name }}{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <div class="page-head">
+    <h1 class="page-title">Catalog</h1>
+    <a class="btn small primary" href="/h/{{ hid }}/catalog/new">{{ icon("plus", 18, 2.2) }}New item</a>
+  </div>
+  <p class="lede">Every item and the stores you buy it at, in order of preference.</p>
+
+  {% if total %}
+  <nav class="filter-chips" aria-label="Filter by store">
+    {% for f in filters %}
+    <a class="filter-chip" href="/h/{{ hid }}/catalog?store={{ f.key }}"{% if f.key == current %} aria-current="true"{% endif %}>
+      {{ f.label }}<span class="filter-count">{{ f.count }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  {% if items %}
+  <label class="search">
+    {{ icon("search", 18) }}
+    <input type="search" placeholder="Search {{ items|length }} item{{ 's' if items|length != 1 }}" data-filter="#catalog-list" aria-label="Search catalog">
+  </label>
+  <ul class="rows" id="catalog-list">
+    {% for c in items %}
+    <li data-filter-text="{{ c.name|lower }}">
+      <a class="row-item link-row" href="/h/{{ hid }}/catalog/{{ c.id }}">
+        <span class="grow">
+          <span class="row-title">{{ c.name }}</span>
+          <span class="rank-summary">
+            {% for r in c.ranks %}{% if not loop.first %} › {% endif %}{{ store_names.get(r.store_id, "?") }}{% else %}No stores yet{% endfor %}
+          </span>
+        </span>
+        {{ icon("chevron-right", 18) }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif total and current == "none" %}
+  <div class="state">
+    <span class="state-mark">{{ icon("check", 28, 2.4) }}</span>
+    <p class="state-title">Every item has a store</p>
+    <p class="state-text">Nothing left without a store.</p>
+  </div>
+  {% elif total %}
+  <p class="muted">No items are ranked at {{ current_label }} yet.</p>
+  {% else %}
+  <p class="muted">No items yet. Items land here when you write recipes or save something you typed on a list.</p>
+  {% endif %}
+</div>
+{% endblock %}

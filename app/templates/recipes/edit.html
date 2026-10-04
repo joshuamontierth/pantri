@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% set nav = "recipes" %}
+{% block title %}{{ "Edit " ~ recipe.name if recipe else "New recipe" }} · Recipes{% endblock %}
+{% macro ing_row(row) %}
+<div class="ing-row" data-ing-row>
+  <div class="ing-main">
+    <input name="ing_name" class="ing-name" value="{{ row.name }}" placeholder="Ingredient" list="catalog-names" aria-label="Ingredient" maxlength="100" autocomplete="off">
+    <input name="ing_amount" class="ing-amount" value="{{ row.amount }}" placeholder="Amt" aria-label="Amount">
+    <input name="ing_unit" class="ing-unit" value="{{ row.unit }}" placeholder="unit" list="unit-options" aria-label="Unit" autocapitalize="none" autocorrect="off">
+    <button type="button" class="ing-remove" data-remove-row aria-label="Remove ingredient">{{ icon("x", 18) }}</button>
+  </div>
+  <div class="ing-stores">
+    <div class="ing-status">
+      <span class="ing-summary"></span>
+      <button type="button" class="linklike" data-toggle-ranks>Change</button>
+    </div>
+    <div class="ing-ranks" hidden>
+      {% with rank_ids=row.ranks, field_name="ing_ranks" %}{% include "_rank_picker.html" %}{% endwith %}
+    </div>
+    <input type="hidden" name="ing_ranks_dirty" value="{{ '1' if row.dirty else '0' }}" data-dirty>
+  </div>
+</div>
+{% endmacro %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <a class="back-link" href="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}">{{ icon("chevron-left", 18) }}{{ recipe.name if recipe else "Recipes" }}</a>
+  <h1 class="page-title">{{ "Edit recipe" if recipe else "New recipe" }}</h1>
+  {% for e in errors %}<p class="alert error">{{ e }}</p>{% endfor %}
+  <form method="post" action="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}" class="stack" id="recipe-form" data-recipe-editor>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="name-servings">
+      <label class="field">
+        <span class="field-label">Name</span>
+        <input name="name" value="{{ name }}" maxlength="150" required {{ 'autofocus' if not recipe }}>
+      </label>
+      <label class="field">
+        <span class="field-label">Serves</span>
+        <input name="base_servings" value="{{ base_servings }}" inputmode="numeric" pattern="[0-9]*" placeholder="4">
+      </label>
+    </div>
+
+    <div>
+      <div class="ing-head">
+        <span class="section-label">Ingredients</span>
+        <span class="field-hint">Amounts like 2, 1/2, 1 1/2 or 0.75</span>
+      </div>
+      <div id="ing-rows">
+        {% for row in rows %}{{ ing_row(row) }}{% endfor %}
+        {% if not rows %}
+          {% for _ in range(3) %}{{ ing_row({"name": "", "amount": "", "unit": "", "ranks": [], "dirty": False}) }}{% endfor %}
+        {% endif %}
+      </div>
+      <button type="button" class="btn small mt" data-add-row>{{ icon("plus", 18, 2.2) }}Add ingredient</button>
+    </div>
+
+    <div class="sticky-actions">
+      <button class="btn primary grow">Save recipe</button>
+      <a class="btn" href="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<template id="ing-row-template">{{ ing_row({"name": "", "amount": "", "unit": "", "ranks": [], "dirty": False}) }}</template>
+<datalist id="catalog-names">{% for c in catalog_json.values() %}<option value="{{ c.name }}">{% endfor %}</datalist>
+<datalist id="unit-options">{% for u in COMMON_UNITS %}<option value="{{ u }}">{% endfor %}</datalist>
+<script type="application/json" id="catalog-data">{{ catalog_json|tojson }}</script>
+{% endblock %}

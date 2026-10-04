@@ -1,0 +1,37 @@
+{% set n_open = p.unchecked|length %}{% set n_done = p.checked|length %}
+<section class="panel" id="panel-{{ p.key }}" data-key="{{ p.key }}" role="tabpanel" aria-label="{{ p.name }}"{% if oob %} hx-swap-oob="innerHTML"{% endif %}>
+  {% if n_open or n_done %}
+  <div class="panel-meta">
+    <span>{% if n_open %}{{ n_open }} to get{% else %}All done{% endif %}{% if n_done %} · {{ n_done }} in cart{% endif %}</span>
+    <span class="meter" role="progressbar" aria-label="{{ p.name }} progress" aria-valuemin="0" aria-valuemax="{{ n_open + n_done }}" aria-valuenow="{{ n_done }}"><span style="width: {{ (100 * n_done / (n_open + n_done))|round|int }}%"></span></span>
+  </div>
+  {% endif %}
+
+  {% if not n_open and not n_done %}
+  <div class="state">
+    <span class="state-mark">{{ icon("list", 28, 1.8) }}</span>
+    <p class="state-title">Nothing on the {{ p.name }} list</p>
+    <p class="state-text">Type an item below, or <a href="/h/{{ household.id }}/plan">add ingredients from recipes</a>.</p>
+  </div>
+  {% elif not n_open %}
+  <div class="state state-done">
+    <span class="state-mark">{{ icon("check", 30, 2.6) }}</span>
+    <p class="state-title">Everything is in the cart</p>
+    <button type="button" class="btn primary" hx-post="/h/{{ household.id }}/lists/{{ p.key }}/clear-checked" hx-swap="none">Clear {{ n_done }} checked item{{ "s" if n_done != 1 }}</button>
+  </div>
+  {% endif %}
+
+  <ul class="items items-open" data-sortable data-reorder-url="/h/{{ household.id }}/lists/{{ p.key }}/reorder">
+    {% for item in p.unchecked %}{% include "lists/_item.html" %}{% endfor %}
+  </ul>
+
+  {% if n_done %}
+  <div class="cart-bar">
+    <span class="section-label">In cart</span>
+    {% if n_open %}<button type="button" class="linklike" hx-post="/h/{{ household.id }}/lists/{{ p.key }}/clear-checked" hx-swap="none">Clear checked</button>{% endif %}
+  </div>
+  <ul class="items items-done">
+    {% for item in p.checked %}{% include "lists/_item.html" %}{% endfor %}
+  </ul>
+  {% endif %}
+</section>

@@ -1,0 +1,15 @@
+services:
+  shopping:
+    build: .
+    container_name: shopping-list
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - shopping-data:/data
+    environment:
+      # Set to "true" if you serve the site over HTTPS (e.g. behind a TLS reverse proxy).
+      COOKIE_SECURE: "false"
+
+volumes:
+  shopping-data:

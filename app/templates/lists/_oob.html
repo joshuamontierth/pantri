@@ -1,0 +1,16 @@
+{% set oob = True %}
+{% for p in panels %}{% include "lists/_panel.html" %}{% endfor %}
+{% for s in stores %}{% set key = s.id|string %}{% include "lists/_count.html" %}{% endfor %}
+{% set key = "none" %}{% include "lists/_count.html" %}
+{% if toast %}
+<div hx-swap-oob="beforeend:#toasts">
+  <div class="toast">
+    <span>{{ toast.text }}</span>
+    {% if toast.undo %}
+    <button type="button" class="toast-action" hx-post="/h/{{ household.id }}/restore-items" hx-vals='{{ {"data": toast.undo}|tojson }}' hx-swap="none">Undo</button>
+    {% elif toast.catalog_offer %}
+    <a class="toast-action" href="/h/{{ household.id }}/catalog/new?name={{ toast.catalog_offer|urlencode }}&next={{ ('/h/' ~ household.id ~ '#store-' ~ toast.key)|urlencode }}">Save to catalog</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ household.name }} · Shopping List{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <ul class="menu-list">
+    <li><a href="/h/{{ hid }}/stores"><span>Stores</span>{{ icon("chevron-right", 18) }}</a></li>
+    <li><a href="/households"><span>Switch household</span>{{ icon("chevron-right", 18) }}</a></li>
+    <li><a href="/account"><span>Account <span class="muted">{{ user.username }}</span></span>{{ icon("chevron-right", 18) }}</a></li>
+    <li>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="menu-button danger-text">Log out</button>
+      </form>
+    </li>
+  </ul>
+
+  {% if error %}<p class="alert error mt-lg">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert success mt-lg">{{ notice }}</p>{% endif %}
+
+  <h2 class="section-label">Household name</h2>
+  {% if membership.is_admin %}
+  <form method="post" action="/h/{{ hid }}/rename" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="name" value="{{ household.name }}" maxlength="100" required aria-label="Household name">
+    <button class="btn">Rename</button>
+  </form>
+  {% else %}
+  <p class="row-title">{{ household.name }}</p>
+  {% endif %}
+
+  <h2 class="section-label">Members</h2>
+  <ul class="rows">
+    {% for m in members %}
+    <li class="member">
+      <div class="row-item">
+        <span class="grow row-title">{{ m.user.username }}{% if m.user_id == user.id %} <span class="muted">(you)</span>{% endif %}</span>
+        {% if m.is_admin %}<span class="badge">Admin</span>{% endif %}
+      </div>
+      {% if membership.is_admin and m.user_id != user.id %}
+      <details class="member-actions">
+        <summary>Manage</summary>
+        <div class="stack">
+          <form method="post" action="/h/{{ hid }}/members/{{ m.id }}/role">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% if m.is_admin %}
+            <input type="hidden" name="role" value="member"><button class="btn small">Make regular member</button>
+            {% else %}
+            <input type="hidden" name="role" value="admin"><button class="btn small">Make admin</button>
+            {% endif %}
+          </form>
+          <form method="post" action="/h/{{ hid }}/members/{{ m.id }}/reset-password" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="text" name="temp_password" placeholder="Temporary password" minlength="8" autocomplete="off" required aria-label="Temporary password">
+            <button class="btn small">Reset password</button>
+          </form>
+          <form method="post" action="/h/{{ hid }}/members/{{ m.id }}/remove" data-confirm="Remove {{ m.user.username }} from {{ household.name }}?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn small danger">Remove from household</button>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if membership.is_admin %}
+  <h2 class="section-label">Invite someone</h2>
+  <form method="post" action="/h/{{ hid }}/invite" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="username" placeholder="Their username" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-label="Username to invite">
+    <button class="btn primary">Invite</button>
+  </form>
+  {% if invites %}
+  <h2 class="section-label">Pending invites</h2>
+  <ul class="rows">
+    {% for inv in invites %}
+    <li class="row-item">
+      <span class="grow row-title">{{ inv.user.username }}</span>
+      <form method="post" action="/h/{{ hid }}/invites/{{ inv.id }}/cancel">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn small">Cancel</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% endif %}
+
+  <h2 class="section-label">Leave or delete</h2>
+  {% if members|length > 1 %}
+  <form method="post" action="/h/{{ hid }}/leave" data-confirm="Leave {{ household.name }}? You'll need a new invite to come back.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn">Leave household</button>
+  </form>
+  {% endif %}
+  {% if membership.is_admin %}
+  <form method="post" action="/h/{{ hid }}/delete" class="stack mt">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field">
+      <span class="field-hint">Deletes this household with all of its lists, stores, catalog and recipes. Type <strong>{{ household.name }}</strong> to confirm.</span>
+      <input name="confirm_name" autocomplete="off" required aria-label="Household name to confirm">
+    </label>
+    <div><button class="btn danger">Delete household</button></div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

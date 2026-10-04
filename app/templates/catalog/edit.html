@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set nav = "catalog" %}
+{% block title %}{{ item.name if item else "New item" }} · Catalog{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+{% set back = next or '/h/' ~ hid ~ '/catalog' %}
+<div class="narrow">
+  <a class="back-link" href="{{ back }}">{{ icon("chevron-left", 18) }}Back</a>
+  <h1 class="page-title">{{ item.name if item else "New item" }}</h1>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  <form method="post" action="/h/{{ hid }}/catalog{{ '/' ~ item.id if item }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="field">
+      <span class="field-label">Stores</span>
+      <span class="field-hint">Tap in order of preference. Tap again to remove.</span>
+      {% set field_name = "ranks" %}
+      {% include "_rank_picker.html" %}
+    </div>
+    <label class="field">
+      <span class="field-label">Name</span>
+      <input name="name" value="{{ name }}" maxlength="100" required {{ 'autofocus' if not item and not name }}>
+    </label>
+    <div class="form-actions">
+      <button class="btn primary">Save</button>
+      <a class="btn" href="{{ back }}">Cancel</a>
+    </div>
+  </form>
+
+  {% if item %}
+  {% if used_by %}
+  <p class="field-hint mt-lg">Used in {% for r in used_by %}<a href="/h/{{ hid }}/recipes/{{ r.id }}">{{ r.name }}</a>{{ ", " if not loop.last }}{% endfor %}</p>
+  {% else %}
+  <form method="post" action="/h/{{ hid }}/catalog/{{ item.id }}/delete" class="mt-lg" data-confirm="Delete {{ item.name }} from the catalog?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn small danger">Delete item</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

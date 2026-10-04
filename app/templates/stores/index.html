@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Stores · {{ household.name }}{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <a class="back-link" href="/h/{{ hid }}">{{ icon("chevron-left", 18) }}Lists</a>
+  <h1 class="page-title">Stores</h1>
+  {% if is_new %}
+  <p class="lede">Add the stores you shop at. Each store gets its own list.</p>
+  {% endif %}
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/h/{{ hid }}/stores" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="name" placeholder="Store name" maxlength="100" required aria-label="New store name" {{ 'autofocus' if is_new or not stores }}>
+    <button class="btn primary">Add</button>
+  </form>
+
+  {% if stores %}
+  <p class="field-hint mt">Drag to change the order of the tabs.</p>
+  <ul class="rows" data-sortable-stores data-reorder-url="/h/{{ hid }}/stores/reorder">
+    {% for s in stores %}
+    {% set n = counts.get(s.id|string, 0) %}
+    <li class="store-row" data-id="{{ s.id }}">
+      <span class="handle" aria-hidden="true"></span>
+      <form method="post" action="/h/{{ hid }}/stores/{{ s.id }}/rename" class="inline-form grow">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="name" value="{{ s.name }}" maxlength="100" required aria-label="Name of {{ s.name }}">
+        <button class="btn small">Rename</button>
+      </form>
+      <form method="post" action="/h/{{ hid }}/stores/{{ s.id }}/delete"
+            data-confirm="Delete {{ s.name }}?{% if n %} Its {{ n }} unchecked item{{ 's' if n != 1 }} will move to {{ OTHER_LABEL }}.{% endif %} It will also be removed from every item's store ranking.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn small icon-btn danger" aria-label="Delete {{ s.name }}">{{ icon("trash", 18) }}</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

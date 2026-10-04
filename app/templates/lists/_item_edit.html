@@ -1,0 +1,31 @@
+<form class="sheet-form" hx-post="/h/{{ household_id }}/items/{{ item.id }}" hx-swap="none" data-sheet-form>
+  <div class="sheet-head">
+    <h2 id="sheet-title" tabindex="-1" autofocus>{{ item.name }}</h2>
+    {% if item.recipe_tags %}<span class="sheet-sub">for {{ item.recipe_tags|join(", ") }}</span>{% endif %}
+  </div>
+  <label class="field">
+    <span class="field-label">Name</span>
+    <input name="name" value="{{ item.name }}" maxlength="100" required list="catalog-names" autocomplete="off">
+  </label>
+  <div class="two-col">
+    <label class="field">
+      <span class="field-label">Quantity</span>
+      <input name="qty" value="{{ qty_text }}" placeholder="2 lb">
+    </label>
+    <label class="field">
+      <span class="field-label">List</span>
+      <select name="store">
+        {% for s in stores %}<option value="{{ s.id }}"{{ ' selected' if s.id == item.store_id }}>{{ s.name }}</option>{% endfor %}
+        <option value="none"{{ ' selected' if item.store_id is none }}>{{ OTHER_LABEL }}</option>
+      </select>
+    </label>
+  </div>
+  <label class="field">
+    <span class="field-label">Note</span>
+    <input name="note" value="{{ item.note }}" maxlength="300" placeholder="the organic kind">
+  </label>
+  <div class="sheet-actions">
+    <button class="btn primary grow">Save</button>
+    <button type="button" class="btn icon-btn danger" hx-post="/h/{{ household_id }}/items/{{ item.id }}/delete" hx-swap="none" aria-label="Delete {{ item.name }}">{{ icon("trash", 20) }}</button>
+  </div>
+</form>

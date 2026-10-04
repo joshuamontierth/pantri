@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Households · Shopping List{% endblock %}
+{% block content %}
+<div class="narrow">
+  <h1 class="page-title">Households</h1>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+
+  {% if invites %}
+  <h2 class="section-label">Invites</h2>
+  <ul class="rows">
+    {% for inv in invites %}
+    <li class="row-item">
+      <div class="grow">
+        <strong>{{ inv.household.name }}</strong>
+        <div class="muted small">from {{ inv.invited_by.username if inv.invited_by else "someone" }}</div>
+      </div>
+      <form method="post" action="/invites/{{ inv.id }}/decline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn small">Decline</button>
+      </form>
+      <form method="post" action="/invites/{{ inv.id }}/accept">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn small primary">Join</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if memberships %}
+  {% if invites %}<h2 class="section-label">Yours</h2>{% endif %}
+  <ul class="rows">
+    {% for m in memberships %}
+    <li><a class="row-item link-row" href="/h/{{ m.household_id }}">
+      <span class="grow row-title">{{ m.household.name }}</span>
+      {% if m.is_admin %}<span class="badge">Admin</span>{% endif %}
+      {{ icon("chevron-right", 18) }}
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% elif not invites %}
+  <p class="lede">You're not in a household yet. Create one, or ask someone to invite your username, <strong>{{ user.username }}</strong>.</p>
+  {% endif %}
+
+  <h2 class="section-label">New household</h2>
+  <form method="post" action="/households" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="name" placeholder="Home" maxlength="100" required aria-label="Household name">
+    <button class="btn primary">Create</button>
+  </form>
+</div>
+{% endblock %}

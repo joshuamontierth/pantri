@@ -1,0 +1,16 @@
+{# Tap stores in order of preference. Needs: stores, rank_ids, field_name. #}
+<div class="rank-picker" data-rank-picker>
+  {% if stores %}
+  <div class="chips">
+    {% for s in stores %}
+    {% set r = rank_ids.index(s.id) + 1 if s.id in rank_ids else 0 %}
+    <button type="button" class="chip{{ ' ranked' if r }}" data-store="{{ s.id }}" aria-pressed="{{ 'true' if r else 'false' }}">
+      <span class="rank-badge">{{ r or "" }}</span><span class="chip-name">{{ s.name }}</span>
+    </button>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="field-hint">No stores yet. <a href="/h/{{ household.id }}/stores">Add stores</a> to rank them.</p>
+  {% endif %}
+  <input type="hidden" name="{{ field_name }}" value="{{ rank_ids|join(',') }}" data-rank-input>
+</div>

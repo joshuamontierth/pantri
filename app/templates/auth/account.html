@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set nav = "account" %}
+{% block title %}Account · Shopping List{% endblock %}
+{% block content %}
+<div class="narrow">
+  <h1 class="page-title">{{ user.username }}</h1>
+  {% if request.query_params.get("changed") %}<p class="alert success">Password changed. Your other devices were logged out.</p>{% endif %}
+  <ul class="menu-list">
+    <li><a href="/households"><span>Households <span class="muted">{{ user_households|length }}</span></span>{{ icon("chevron-right", 18) }}</a></li>
+    <li><a href="/account/password"><span>Change password</span>{{ icon("chevron-right", 18) }}</a></li>
+    <li>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="menu-button danger-text">Log out</button>
+      </form>
+    </li>
+  </ul>
+</div>
+{% endblock %}

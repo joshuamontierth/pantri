@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set nav = "recipes" %}
+{% block title %}{{ recipe.name }} · Recipes{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <a class="back-link" href="/h/{{ hid }}/recipes">{{ icon("chevron-left", 18) }}Recipes</a>
+  {% if copied %}<p class="alert success">Copied into {{ household.name }}. Ingredients that were new here have no stores yet. <a href="/h/{{ hid }}/catalog">Set their stores</a></p>{% endif %}
+  <h1 class="page-title">{{ recipe.name }}</h1>
+  {% if recipe.base_servings %}<p class="lede">Serves {{ recipe.base_servings }}</p>{% endif %}
+
+  <a class="btn primary block" href="/h/{{ hid }}/plan/pick?r={{ recipe.id }}">Add to lists</a>
+
+  <h2 class="section-label">Ingredients</h2>
+  <ul class="rows">
+    {% for ing in recipe.ingredients %}
+    <li>
+      <a class="row-item link-row" href="/h/{{ hid }}/catalog/{{ ing.catalog_item_id }}?next=/h/{{ hid }}/recipes/{{ recipe.id }}">
+        <span class="grow">
+          <span class="row-title">{{ ing.catalog_item.name }}</span>
+          <span class="rank-summary">
+            {% for r in ing.catalog_item.ranks %}{% if not loop.first %} › {% endif %}{{ store_names.get(r.store_id, "?") }}{% else %}{{ OTHER_LABEL }}{% endfor %}
+          </span>
+        </span>
+        {% if ing.amount is not none %}<span class="qty">{{ format_part(ing.amount, ing.unit) }}</span>{% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <div class="form-actions mt-lg">
+    <a class="btn" href="/h/{{ hid }}/recipes/{{ recipe.id }}/edit">Edit</a>
+    {% if other_households %}
+    <details class="copy-menu">
+      <summary class="btn">Copy to…</summary>
+      <form method="post" action="/h/{{ hid }}/recipes/{{ recipe.id }}/copy" class="inline-form mt">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <select name="target_household_id" aria-label="Household to copy into">
+          {% for h in other_households %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}
+        </select>
+        <button class="btn">Copy</button>
+      </form>
+    </details>
+    {% endif %}
+    <form method="post" action="/h/{{ hid }}/recipes/{{ recipe.id }}/delete" data-confirm="Delete the recipe {{ recipe.name }}?" class="push-right">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn icon-btn danger" aria-label="Delete recipe">{{ icon("trash", 20) }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set nav = "recipes" %}
+{% block title %}Recipes · {{ household.name }}{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <div class="page-head">
+    <h1 class="page-title">Recipes</h1>
+    <a class="btn small" href="/h/{{ hid }}/recipes/new">{{ icon("plus", 18, 2.2) }}New</a>
+  </div>
+  {% if recipes %}
+  <a class="btn primary block" href="/h/{{ hid }}/plan">Add recipes to lists</a>
+  <label class="search mt">
+    {{ icon("search", 18) }}
+    <input type="search" placeholder="Search {{ recipes|length }} recipes" data-filter="#recipe-list" aria-label="Search recipes">
+  </label>
+  <ul class="rows" id="recipe-list">
+    {% for r in recipes %}
+    <li data-filter-text="{{ r.name|lower }}">
+      <a class="row-item link-row" href="/h/{{ hid }}/recipes/{{ r.id }}">
+        <span class="grow">
+          <span class="row-title">{{ r.name }}</span>
+          <span class="rank-summary">{{ r.ingredients|length }} ingredient{{ 's' if r.ingredients|length != 1 }}{% if r.base_servings %} · serves {{ r.base_servings }}{% endif %}</span>
+        </span>
+        {{ icon("chevron-right", 18) }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="lede">No recipes yet. Write one down, list its ingredients, and pick the stores you buy each one at.</p>
+  <a class="btn primary" href="/h/{{ hid }}/recipes/new">New recipe</a>
+  {% endif %}
+</div>
+{% endblock %}
