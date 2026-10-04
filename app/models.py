@@ -165,7 +165,6 @@ class Recipe(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(150))
-    base_servings: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     ingredients: Mapped[list["RecipeIngredient"]] = relationship(

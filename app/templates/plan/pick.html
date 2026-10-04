@@ -15,9 +15,6 @@
       <input type="hidden" name="r" value="{{ r.id }}">
       <span class="row-title">{{ r.name }}</span>
       <div class="plan-scale">
-        {% if r.base_servings %}
-        <label>Serves <input class="servings" data-base="{{ r.base_servings }}" value="{{ '%g'|format(r.base_servings * sel.mult) }}" inputmode="decimal" aria-label="Servings for {{ r.name }}"></label>
-        {% endif %}
         <label>× <input class="mult" name="m_{{ r.id }}" value="{{ sel.mult_text }}" inputmode="decimal" aria-label="Multiplier for {{ r.name }}"></label>
       </div>
     </div>

@@ -29,16 +29,10 @@
   {% for e in errors %}<p class="alert error">{{ e }}</p>{% endfor %}
   <form method="post" action="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}" class="stack" id="recipe-form" data-recipe-editor>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="name-servings">
-      <label class="field">
-        <span class="field-label">Name</span>
-        <input name="name" value="{{ name }}" maxlength="150" required {{ 'autofocus' if not recipe }}>
-      </label>
-      <label class="field">
-        <span class="field-label">Serves</span>
-        <input name="base_servings" value="{{ base_servings }}" inputmode="numeric" pattern="[0-9]*" placeholder="4">
-      </label>
-    </div>
+    <label class="field">
+      <span class="field-label">Name</span>
+      <input name="name" value="{{ name }}" maxlength="150" required {{ 'autofocus' if not recipe }}>
+    </label>
 
     <div>
       <div class="ing-head">

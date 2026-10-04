@@ -20,7 +20,7 @@
       <a class="row-item link-row" href="/h/{{ hid }}/recipes/{{ r.id }}">
         <span class="grow">
           <span class="row-title">{{ r.name }}</span>
-          <span class="rank-summary">{{ r.ingredients|length }} ingredient{{ 's' if r.ingredients|length != 1 }}{% if r.base_servings %} · serves {{ r.base_servings }}{% endif %}</span>
+          <span class="rank-summary">{{ r.ingredients|length }} ingredient{{ 's' if r.ingredients|length != 1 }}</span>
         </span>
         {{ icon("chevron-right", 18) }}
       </a>

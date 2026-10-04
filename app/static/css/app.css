@@ -516,7 +516,6 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 .chip.ranked .rank-badge { display: inline-grid; animation: pop 300ms var(--ease); }
 
 /* ---------- recipe editor ---------- */
-.name-servings { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 10px; }
 .ing-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
 .ing-head .section-label { margin: 0; }
 .ing-row { padding: 12px 0; border-bottom: 1px solid var(--rule); }

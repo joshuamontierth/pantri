@@ -5,7 +5,7 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Households:** shared groups of lists. Invite people by username. A household can have several admins, and you can belong to more than one household.
 - **Stores and lists:** one list per store, plus an "Other" list for items without a store. Swipe between stores. Drag to reorder, tap to check off, then "Clear checked" (with undo). New items go to the store you're viewing; suggestions offer a one-tap "+ usual store" when an item normally comes from somewhere else. Changes from other people appear live.
 - **Catalog:** each item has a ranked list of stores (1st, 2nd, 3rd…). The 1st store is the default.
-- **Recipes:** ingredients have amounts and units. Pick one or more recipes, scale them by servings or a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups).
+- **Recipes:** ingredients have amounts and units. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups).
 
 ## Run it (Docker)
 

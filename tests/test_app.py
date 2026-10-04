@@ -106,8 +106,7 @@ def test_recipe_to_lists_flow(make_user):
     walmart = alice.add_store(hid, "Walmart")
 
     r = alice.post(f"/h/{hid}/recipes", {
-        "name": "Pancakes", "base_servings": "4",
-        "ing_name": ["Flour", "Eggs", "Milk", ""],
+        "name": "Pancakes", "ing_name": ["Flour", "Eggs", "Milk", ""],
         "ing_amount": ["2", "2", "1 1/2", ""],
         "ing_unit": ["cups", "", "cup", ""],
         "ing_ranks": [f"{costco},{walmart}", f"{costco}", "", ""],
@@ -117,8 +116,7 @@ def test_recipe_to_lists_flow(make_user):
     pancakes = int(r.headers["location"].rsplit("/", 1)[1])
 
     r = alice.post(f"/h/{hid}/recipes", {
-        "name": "Quiche", "base_servings": "",
-        "ing_name": ["eggs", "Flour", "Cheese"],
+        "name": "Quiche", "ing_name": ["eggs", "Flour", "Cheese"],
         "ing_amount": ["4", "4 tbsp", "8"],
         "ing_unit": ["", "", "oz"],
         "ing_ranks": ["", "", f"{walmart}"],
@@ -137,6 +135,7 @@ def test_recipe_to_lists_flow(make_user):
 
     # Picker page: everything unchecked, primary store preselected.
     page = alice.get(f"/h/{hid}/plan/pick?r={pancakes}&r={quiche}&m_{pancakes}=2").text
+    assert "Serves" not in page
     assert "checked" not in page.split('id="plan-rows"')[1].split("sticky-actions")[0].replace("checked=", "")
     assert "Costco · 1st" in page and "Walmart · 2nd" in page
 
@@ -168,7 +167,7 @@ def test_plan_rows_fragment_preserves_choices(make_user):
     hid = alice.create_household()
     s1 = alice.add_store(hid, "S1")
     alice.post(f"/h/{hid}/recipes", {
-        "name": "Toast", "base_servings": "2", "ing_name": ["Bread"], "ing_amount": ["2"], "ing_unit": ["slices"],
+        "name": "Toast", "ing_name": ["Bread"], "ing_amount": ["2"], "ing_unit": ["slices"],
         "ing_ranks": [str(s1)], "ing_ranks_dirty": ["0"],
     })
     with session() as s:
@@ -184,12 +183,11 @@ def test_recipe_validation_errors(make_user):
     alice = make_user("alice")
     hid = alice.create_household()
     r = alice.post(f"/h/{hid}/recipes", {
-        "name": "Bad", "base_servings": "x",
-        "ing_name": ["Salt"], "ing_amount": ["pinch"], "ing_unit": ["oz"],
+        "name": "Bad", "ing_name": ["Salt"], "ing_amount": ["pinch"], "ing_unit": ["oz"],
         "ing_ranks": [""], "ing_ranks_dirty": ["0"],
     })
     assert r.status_code == 400
-    assert "Servings must be a whole number" in r.text and "Couldn" in r.text
+    assert "Couldn" in r.text
     assert 'value="Salt"' in r.text  # form re-filled
 
 
@@ -197,7 +195,7 @@ def test_catalog_delete_blocked_when_used(make_user):
     alice = make_user("alice")
     hid = alice.create_household()
     alice.post(f"/h/{hid}/recipes", {
-        "name": "Salad", "base_servings": "", "ing_name": ["Lettuce"], "ing_amount": [""], "ing_unit": [""],
+        "name": "Salad", "ing_name": ["Lettuce"], "ing_amount": [""], "ing_unit": [""],
         "ing_ranks": [""], "ing_ranks_dirty": ["0"],
     })
     with session() as s:
@@ -281,7 +279,7 @@ def test_copy_recipe_between_households(make_user):
     s1 = alice.add_store(h1, "Store1")
     alice.post(f"/h/{h2}/catalog", {"name": "Butter", "ranks": ""})
     alice.post(f"/h/{h1}/recipes", {
-        "name": "Cookies", "base_servings": "24", "ing_name": ["Butter", "Sugar"], "ing_amount": ["1", "1"],
+        "name": "Cookies", "ing_name": ["Butter", "Sugar"], "ing_amount": ["1", "1"],
         "ing_unit": ["cup", "cup"], "ing_ranks": [str(s1), str(s1)], "ing_ranks_dirty": ["0", "0"],
     })
     with session() as s:
@@ -300,7 +298,7 @@ def test_delete_household(make_user):
     hid = alice.create_household("Temp")
     st = alice.add_store(hid, "S")
     alice.post(f"/h/{hid}/recipes", {
-        "name": "R", "base_servings": "", "ing_name": ["X"], "ing_amount": ["1"], "ing_unit": [""],
+        "name": "R", "ing_name": ["X"], "ing_amount": ["1"], "ing_unit": [""],
         "ing_ranks": [str(st)], "ing_ranks_dirty": ["0"],
     })
     alice.post(f"/h/{hid}/items", {"name": "X", "target": "auto"}, htmx=True)
@@ -317,7 +315,7 @@ def test_pages_render(make_user):
     hid = alice.create_household()
     st = alice.add_store(hid, "Costco")
     alice.post(f"/h/{hid}/recipes", {
-        "name": "R", "base_servings": "2", "ing_name": ["X"], "ing_amount": ["1"], "ing_unit": ["cup"],
+        "name": "R", "ing_name": ["X"], "ing_amount": ["1"], "ing_unit": ["cup"],
         "ing_ranks": [str(st)], "ing_ranks_dirty": ["0"],
     })
     alice.post(f"/h/{hid}/items", {"name": "X", "qty": "1 cup", "note": "", "target": "auto"}, htmx=True)
@@ -360,7 +358,7 @@ def test_huge_and_odd_quantities_dont_break_lists(make_user):
     assert all(i.quantities == [] and i.note for i in items(hid, s))
     assert alice.get(f"/h/{hid}").status_code == 200
     r = alice.post(f"/h/{hid}/recipes", {
-        "name": "Big", "base_servings": "²", "ing_name": ["X"], "ing_amount": ["9" * 400], "ing_unit": [""],
+        "name": "Big", "ing_name": ["X"], "ing_amount": ["9" * 400], "ing_unit": [""],
         "ing_ranks": ["²"], "ing_ranks_dirty": ["0"],
     })
     assert r.status_code == 400
@@ -380,7 +378,7 @@ def test_resaving_recipe_keeps_exact_amounts(make_user):
     amounts = ["0.05", "1.3", "2.25", "0.4", "15.4", "1/3"]
     units = ["lb", "cup", "g", "cup", "ml", "cup"]
     r = alice.post(f"/h/{hid}/recipes", {
-        "name": "Exact", "base_servings": "", "ing_name": names, "ing_amount": amounts, "ing_unit": units,
+        "name": "Exact", "ing_name": names, "ing_amount": amounts, "ing_unit": units,
         "ing_ranks": [""] * 6, "ing_ranks_dirty": ["0"] * 6,
     })
     rid = int(r.headers["location"].rsplit("/", 1)[1])
@@ -388,7 +386,7 @@ def test_resaving_recipe_keeps_exact_amounts(make_user):
     page = alice.get(f"/h/{hid}/recipes/{rid}/edit").text
     shown = re.findall(r'name="ing_amount" class="ing-amount" value="([^"]*)"', page)
     alice.post(f"/h/{hid}/recipes/{rid}", {
-        "name": "Exact", "base_servings": "", "ing_name": names, "ing_amount": shown, "ing_unit": units,
+        "name": "Exact", "ing_name": names, "ing_amount": shown, "ing_unit": units,
         "ing_ranks": [""] * 6, "ing_ranks_dirty": ["0"] * 6,
     })
     with session() as s:

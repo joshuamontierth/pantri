@@ -564,16 +564,6 @@
   }
 
   // ---------- recipes to lists picker ----------
-  function parseNumber(text) {
-    text = (text || "").trim();
-    let m = text.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/);
-    if (m) return +m[1] + m[2] / m[3];
-    m = text.match(/^(\d+)\s*\/\s*(\d+)$/);
-    if (m) return m[1] / m[2];
-    const n = parseFloat(text);
-    return isNaN(n) ? NaN : n;
-  }
-
   function initPlanPicker(form) {
     const applyBtn = form.querySelector("[data-apply-button]");
     const applyMain = applyBtn.querySelector(".apply-main");
@@ -593,21 +583,8 @@
       applySub.textContent = Array.from(perStore, ([name, count]) => name + " " + count).join(" · ");
     }
 
-    form.addEventListener("input", (e) => {
-      const recipe = e.target.closest(".plan-recipe");
-      if (!recipe) return;
-      const servings = recipe.querySelector(".servings");
-      const mult = recipe.querySelector(".mult");
-      if (e.target === servings) {
-        const s = parseNumber(servings.value), base = parseFloat(servings.dataset.base);
-        if (s > 0 && base > 0) mult.value = String(+(s / base).toFixed(3));
-      } else if (e.target === mult && servings) {
-        const m = parseNumber(mult.value);
-        if (m > 0) servings.value = String(+(parseFloat(servings.dataset.base) * m).toFixed(2));
-      }
-    });
     form.addEventListener("change", (e) => {
-      if (e.target.matches(".servings, .mult")) htmx.trigger("#plan-rows", "recalc");
+      if (e.target.matches(".mult")) htmx.trigger("#plan-rows", "recalc");
       if (e.target.matches('input[name="include"]')) {
         e.target.closest(".pick-row").classList.toggle("on", e.target.checked);
         if (e.target.checked) buzz(8);
@@ -619,7 +596,7 @@
       updateCount();
     });
     form.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target.matches(".servings, .mult")) { e.preventDefault(); e.target.blur(); }
+      if (e.key === "Enter" && e.target.matches(".mult")) { e.preventDefault(); e.target.blur(); }
     });
     form.querySelector("[data-select-all]").addEventListener("click", () => {
       const boxes = Array.from(form.querySelectorAll('input[name="include"]'));

@@ -41,12 +41,12 @@
 - Catalog page: create, rename, edit rankings, delete (blocked if used by a recipe; shows which).
 
 ## Recipes (per household)
-- Fields: name, base servings, ingredients (catalog item + optional quantity + unit).
+- Fields: name, ingredients (catalog item + optional quantity + unit).
 - Typing an ingredient not in the catalog creates it inline, with store rankings settable right in the recipe editor.
 - **Copy recipe** to another household you belong to: ingredients match that household's catalog by name, or are created there with no rankings.
 
 ## Add Recipe(s) → Lists
-- Select **one or more recipes**; each has its own scaling (servings or multiplier).
+- Select **one or more recipes**; each has its own multiplier (×2, ×½, …).
 - One combined picker; ingredients shared across selected recipes are combined into one row.
 - Every ingredient starts **unchecked**; check the ones you need.
 - Each row has a store dropdown: that ingredient's ranked stores in order (default = primary), then other household stores, then "Other".

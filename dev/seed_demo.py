@@ -55,13 +55,13 @@ def main():
         items[name] = services.create_catalog_item(s, home.id, name, [stores[r] for r in ranks])
 
     recipes = {
-        ("Pancakes", 4): [("Flour", 1.5, "cup"), ("Eggs", 1, ""), ("Milk", 1.25, "cup"), ("Butter", 3, "tbsp"),
+        "Pancakes": [("Flour", 1.5, "cup"), ("Eggs", 1, ""), ("Milk", 1.25, "cup"), ("Butter", 3, "tbsp"),
                           ("Sugar", 1, "tbsp"), ("Baking powder", 3.5, "tsp"), ("Salt", 0.25, "tsp")],
-        ("Spinach quiche", 6): [("Eggs", 4, ""), ("Milk", 1, "cup"), ("Cheddar cheese", 8, "oz"),
+        "Spinach quiche": [("Eggs", 4, ""), ("Milk", 1, "cup"), ("Cheddar cheese", 8, "oz"),
                                 ("Spinach", 10, "oz"), ("Flour", 0.25, "cup"), ("Butter", 2, "tbsp")],
     }
-    for (name, servings), ings in recipes.items():
-        r = Recipe(household_id=home.id, name=name, base_servings=servings)
+    for name, ings in recipes.items():
+        r = Recipe(household_id=home.id, name=name)
         s.add(r)
         s.flush()
         for pos, (ing, amount, unit) in enumerate(ings):

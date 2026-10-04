@@ -45,7 +45,7 @@ def _rows_from_recipe(recipe):
     ]
 
 
-def _editor(request, db, membership, recipe=None, name="", base_servings="", rows=None, errors=None, status_code=200):
+def _editor(request, db, membership, recipe=None, name="", rows=None, errors=None, status_code=200):
     hid = membership.household_id
     catalog = services.catalog_items(db, hid)
     return render(
@@ -54,7 +54,6 @@ def _editor(request, db, membership, recipe=None, name="", base_servings="", row
         {
             "recipe": recipe,
             "name": name,
-            "base_servings": base_servings,
             "rows": rows if rows is not None else [],
             "errors": errors or [],
             "stores": services.household_stores(db, hid),
@@ -80,20 +79,13 @@ def _read_editor_form(form):
          "ranks_text": ranks[i], "dirty": dirty[i] == "1"}
         for i in range(n)
     ]
-    return form.get("name", "").strip(), form.get("base_servings", "").strip(), rows
+    return form.get("name", "").strip(), rows
 
 
-def _validate(db, household_id, name, base_servings_text, raw_rows):
+def _validate(db, household_id, name, raw_rows):
     errors = []
     if not name or len(name) > 150:
-        errors.append("Recipe name must be 1–150 characters.")
-    base_servings = None
-    if base_servings_text:
-        n = services.parse_int(base_servings_text)
-        if n is not None and 0 < n <= 1000:
-            base_servings = n
-        else:
-            errors.append("Servings must be a whole number like 4 (or leave it blank).")
+        errors.append("Recipe name must be 1 to 150 characters.")
     rows, parsed = [], []
     for raw in raw_rows:
         rank_ids = services.parse_rank_ids(db, household_id, raw["ranks_text"])
@@ -117,7 +109,7 @@ def _validate(db, household_id, name, base_servings_text, raw_rows):
         parsed.append((raw["name"], amount, unit, rank_ids, raw["dirty"]))
     if not parsed and not errors:
         errors.append("Add at least one ingredient.")
-    return errors, base_servings, rows, parsed
+    return errors, rows, parsed
 
 
 def _save_ingredients(db, household_id, recipe, parsed):
@@ -147,11 +139,11 @@ def new_recipe(request: Request, membership=Depends(household_member), db: Sessi
 
 @router.post("/h/{household_id}/recipes")
 def create_recipe(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
-    name, servings_text, raw_rows = _read_editor_form(form)
-    errors, base_servings, rows, parsed = _validate(db, household_id, name, servings_text, raw_rows)
+    name, raw_rows = _read_editor_form(form)
+    errors, rows, parsed = _validate(db, household_id, name, raw_rows)
     if errors:
-        return _editor(request, db, membership, name=name, base_servings=servings_text, rows=rows, errors=errors, status_code=400)
-    recipe = Recipe(household_id=household_id, name=name, base_servings=base_servings)
+        return _editor(request, db, membership, name=name, rows=rows, errors=errors, status_code=400)
+    recipe = Recipe(household_id=household_id, name=name)
     db.add(recipe)
     db.flush()
     _save_ingredients(db, household_id, recipe, parsed)
@@ -183,20 +175,18 @@ def view_recipe(request: Request, household_id: int, recipe_id: int, copied: int
 def edit_recipe(request: Request, household_id: int, recipe_id: int, membership=Depends(household_member), db: Session = Depends(get_db)):
     recipe = _get_recipe(db, household_id, recipe_id)
     return _editor(
-        request, db, membership, recipe=recipe, name=recipe.name,
-        base_servings=str(recipe.base_servings or ""), rows=_rows_from_recipe(recipe),
+        request, db, membership, recipe=recipe, name=recipe.name, rows=_rows_from_recipe(recipe),
     )
 
 
 @router.post("/h/{household_id}/recipes/{recipe_id}")
 def update_recipe(request: Request, household_id: int, recipe_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
     recipe = _get_recipe(db, household_id, recipe_id)
-    name, servings_text, raw_rows = _read_editor_form(form)
-    errors, base_servings, rows, parsed = _validate(db, household_id, name, servings_text, raw_rows)
+    name, raw_rows = _read_editor_form(form)
+    errors, rows, parsed = _validate(db, household_id, name, raw_rows)
     if errors:
-        return _editor(request, db, membership, recipe=recipe, name=name, base_servings=servings_text, rows=rows, errors=errors, status_code=400)
+        return _editor(request, db, membership, recipe=recipe, name=name, rows=rows, errors=errors, status_code=400)
     recipe.name = name
-    recipe.base_servings = base_servings
     _save_ingredients(db, household_id, recipe, parsed)
     db.commit()
     return RedirectResponse(f"/h/{household_id}/recipes/{recipe.id}", status_code=303)
@@ -218,7 +208,7 @@ def copy_recipe(
     target_member = db.query(Membership).filter_by(household_id=target_household_id, user_id=membership.user_id).one_or_none()
     if target_member is None or target_household_id == household_id:
         raise HTTPException(404, "Household not found")
-    copy = Recipe(household_id=target_household_id, name=recipe.name, base_servings=recipe.base_servings)
+    copy = Recipe(household_id=target_household_id, name=recipe.name)
     db.add(copy)
     db.flush()
     for ing in recipe.ingredients:
