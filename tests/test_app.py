@@ -516,3 +516,14 @@ def test_catalog_store_filter_persists(make_user):
     # Bad filter values fall back to All; "All" is remembered too.
     assert len(names(alice.get(f"/h/{hid}/catalog?store=9999").text)) == 5
     assert len(names(alice.get(f"/h/{hid}/catalog").text)) == 5
+
+
+def test_gear_menu_and_household_switching(make_user):
+    alice = make_user("alice")
+    home = alice.create_household("Home")
+    cabin = alice.create_household("Cabin")
+    page = alice.get(f"/h/{home}").text
+    assert f'class="gear" href="/h/{home}/settings"' in page and "hh-name" not in page
+    settings = alice.get(f"/h/{home}/settings").text
+    assert f'href="/h/{cabin}"' in settings and f'href="/h/{home}" aria-current="page"' in settings
+    assert "New household or invites" in settings and "Log out" in settings

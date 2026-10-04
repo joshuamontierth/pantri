@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% set nav = "settings" %}
 {% block title %}Stores · {{ household.name }}{% endblock %}
 {% block content %}
 {% set hid = household.id %}
 <div class="narrow">
-  <a class="back-link" href="/h/{{ hid }}">{{ icon("chevron-left", 18) }}Lists</a>
+  <a class="back-link" href="/h/{{ hid }}/settings">{{ icon("chevron-left", 18) }}Settings</a>
   <h1 class="page-title">Stores</h1>
   {% if is_new %}
   <p class="lede">Add the stores you shop at. Each store gets its own list.</p>

@@ -19,14 +19,12 @@
   {% if user %}
   <header class="topbar">
     {% if household %}
-    <a class="hh-link" href="/h/{{ household.id }}/settings" aria-label="{{ household.name }}, household menu">
-      <span class="hh-name">{{ household.name }}</span>{{ icon("chevron-down", 16, 2.2) }}
-    </a>
     <nav class="mainnav" aria-label="Sections">
       <a href="/h/{{ household.id }}"{% if nav == 'lists' %} aria-current="page"{% endif %}>Lists</a>
       <a href="/h/{{ household.id }}/recipes"{% if nav == 'recipes' %} aria-current="page"{% endif %}>Recipes</a>
       <a href="/h/{{ household.id }}/catalog"{% if nav == 'catalog' %} aria-current="page"{% endif %}>Catalog</a>
     </nav>
+    <a class="gear" href="/h/{{ household.id }}/settings" aria-label="Settings"{% if nav == 'settings' %} aria-current="page"{% endif %}>{{ icon("gear", 22, 1.8) }}</a>
     {% else %}
     <a class="hh-link" href="/households"><span class="hh-name">Shopping List</span></a>
     <nav class="mainnav" aria-label="Account">

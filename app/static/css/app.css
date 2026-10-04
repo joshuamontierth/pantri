@@ -118,7 +118,7 @@ button { font: inherit; color: inherit; }
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 8px;
   min-height: 52px;
-  padding: env(safe-area-inset-top) max(6px, calc((100vw - 680px) / 2 - 10px)) 0 max(16px, calc((100vw - 680px) / 2));
+  padding: env(safe-area-inset-top) max(4px, calc((100vw - 680px) / 2 - 10px)) 0 max(6px, calc((100vw - 680px) / 2 - 10px));
   background: var(--paper);
 }
 .hh-link {
@@ -127,9 +127,18 @@ button { font: inherit; color: inherit; }
 }
 .hh-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mainnav { display: flex; flex: none; }
+.topbar .hh-link { padding-left: 10px; }
+.gear {
+  margin-left: auto; width: 44px; height: 44px; display: grid; place-content: center;
+  border-radius: 10px; color: var(--ink-2); transition: color 140ms, transform 300ms var(--ease);
+}
+.gear[aria-current="page"] { color: var(--ink); }
+.gear:active { transform: rotate(45deg); }
+.current-mark { color: var(--accent); }
+.menu-list a[aria-current="page"] { cursor: default; }
 .mainnav a {
   padding: 12px 10px; color: var(--ink-2); text-decoration: none;
-  font-weight: 500; font-size: 15px; border-radius: 8px;
+  font-weight: 500; font-size: 16px; border-radius: 8px;
 }
 .mainnav a[aria-current="page"] { color: var(--ink); font-weight: 700; }
 .invite-banner {

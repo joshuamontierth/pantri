@@ -1,32 +1,38 @@
 {% extends "base.html" %}
-{% block title %}{{ household.name }} · Shopping List{% endblock %}
+{% set nav = "settings" %}
+{% block title %}Settings · {{ household.name }}{% endblock %}
 {% block content %}
 {% set hid = household.id %}
 <div class="narrow">
+  <h1 class="page-title">{{ household.name }}</h1>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert success">{{ notice }}</p>{% endif %}
+
   <ul class="menu-list">
     <li><a href="/h/{{ hid }}/stores"><span>Stores</span>{{ icon("chevron-right", 18) }}</a></li>
-    <li><a href="/households"><span>Switch household</span>{{ icon("chevron-right", 18) }}</a></li>
-    <li><a href="/account"><span>Account <span class="muted">{{ user.username }}</span></span>{{ icon("chevron-right", 18) }}</a></li>
-    <li>
-      <form method="post" action="/logout">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="menu-button danger-text">Log out</button>
-      </form>
-    </li>
   </ul>
 
-  {% if error %}<p class="alert error mt-lg">{{ error }}</p>{% endif %}
-  {% if notice %}<p class="alert success mt-lg">{{ notice }}</p>{% endif %}
+  <h2 class="section-label">Switch household</h2>
+  <ul class="menu-list">
+    {% for h in user_households %}
+    <li>
+      {% if h.id == hid %}
+      <a href="/h/{{ h.id }}" aria-current="page"><span>{{ h.name }}</span><span class="current-mark">{{ icon("check", 18, 2.4) }}</span></a>
+      {% else %}
+      <a href="/h/{{ h.id }}"><span>{{ h.name }}</span>{{ icon("chevron-right", 18) }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+    <li><a href="/households"><span>New household or invites{% if pending_invite_count %} <span class="badge">{{ pending_invite_count }}</span>{% endif %}</span>{{ icon("chevron-right", 18) }}</a></li>
+  </ul>
 
-  <h2 class="section-label">Household name</h2>
   {% if membership.is_admin %}
+  <h2 class="section-label">Household name</h2>
   <form method="post" action="/h/{{ hid }}/rename" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input name="name" value="{{ household.name }}" maxlength="100" required aria-label="Household name">
     <button class="btn">Rename</button>
   </form>
-  {% else %}
-  <p class="row-title">{{ household.name }}</p>
   {% endif %}
 
   <h2 class="section-label">Members</h2>
@@ -87,6 +93,17 @@
   </ul>
   {% endif %}
   {% endif %}
+
+  <h2 class="section-label">Account</h2>
+  <ul class="menu-list">
+    <li><a href="/account"><span>{{ user.username }}</span>{{ icon("chevron-right", 18) }}</a></li>
+    <li>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="menu-button danger-text">Log out</button>
+      </form>
+    </li>
+  </ul>
 
   <h2 class="section-label">Leave or delete</h2>
   {% if members|length > 1 %}
