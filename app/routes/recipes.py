@@ -140,20 +140,32 @@ def recipes_page(request: Request, household_id: int, membership=Depends(househo
     return _recipes_page(request, db, membership)
 
 
+# Seasoning-sized measures don't belong on a shopping list; these become a blank amount.
+_VAGUE_RE = re.compile(r"\b(pinch|pinches|dash|dashes|smidgen|splash|sprinkle|drizzle|to taste|as needed|as desired|optional)\b", re.I)
+
+
 def _clean_scanned_amount(amount_text, unit_text):
-    """Tidy what the model read ("1-2", "Tbsp.", "cloves") into what the editor expects."""
-    amount_text = amount_text.strip()
+    """Tidy what the model read ("1-2", "Tbsp.", "cloves") into what the editor accepts, or blank it."""
+    amount_text, unit_text = amount_text.strip(), unit_text.strip()
+    if _VAGUE_RE.search(amount_text) or _VAGUE_RE.search(unit_text):
+        return "", ""
     rng = re.match(r"^(.+?)\s*(?:-|–|to)\s*(.+)$", amount_text)
     if rng:
         amount_text = rng.group(2)  # ranges: buy enough for the larger amount
     if not amount_text:
         return "", ""
-    unit = quantities.unit_label(quantities.normalize_unit(unit_text))
     try:
         value = quantities.parse_amount(amount_text)
+        unit = quantities.normalize_unit(unit_text)
     except ValueError:
-        return amount_text, unit  # leave it for the user to fix in the editor
-    return (quantities.amount_input_text(value) if value else amount_text), unit
+        try:
+            # e.g. amount "2 cups" with the unit folded in
+            value, unit = quantities.parse_part(f"{amount_text} {unit_text}")
+        except ValueError:
+            return "", ""  # "some", "a few": leave it blank so the recipe still saves
+    if not value or value <= 0:
+        return "", ""
+    return quantities.amount_input_text(value), quantities.unit_label(unit)
 
 
 @router.post("/h/{household_id}/recipes/scan")

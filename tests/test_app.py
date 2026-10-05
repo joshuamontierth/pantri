@@ -609,3 +609,36 @@ def test_scan_recipe_errors(make_user, monkeypatch):
 
     monkeypatch.setattr("app.config.OLLAMA_URL", "")
     assert "data-scan-form" not in alice.get(f"/h/{hid}/recipes").text
+
+
+def test_scanned_pinches_are_blank_and_recipe_saves(make_user, monkeypatch):
+    import re
+    from html import unescape
+
+    from app import scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    monkeypatch.setattr(scan, "_ask_model", lambda photos, names: {"name": "Guacamole", "ingredients": [
+        {"item": "avocados", "amount": "3", "unit": ""},
+        {"item": "cayenne pepper", "amount": "1", "unit": "pinch"},
+        {"item": "salt", "amount": "a pinch", "unit": ""},
+        {"item": "pepper", "amount": "", "unit": "to taste"},
+        {"item": "lime juice", "amount": "some", "unit": ""},
+    ]})
+    r = alice.client.post(f"/h/{hid}/recipes/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", ("card.jpg", _jpeg_bytes(), "image/jpeg"))])
+    assert r.status_code == 200
+    page = r.text.split('id="ing-row-template"')[0]  # ignore the blank template row
+
+    def values(field):
+        return [unescape(v) for v in re.findall(rf'name="{field}"[^>]*?value="([^"]*)"', page)]
+
+    form = {f: values(f) for f in ("ing_name", "ing_amount", "ing_unit", "ing_ranks", "ing_ranks_dirty")}
+    assert form["ing_amount"] == ["3", "", "", "", ""] and form["ing_unit"] == ["", "", "", "", ""]
+    r = alice.post(f"/h/{hid}/recipes", {"name": "Guacamole", **form})
+    assert r.status_code == 303, r.text[:400]
+    with session() as s:
+        recipe = s.query(models.Recipe).one()
+        assert [(i.catalog_item.name, i.amount) for i in recipe.ingredients] == [
+            ("Avocados", 3.0), ("Cayenne pepper", None), ("Salt", None), ("Pepper", None), ("Lime juice", None)]

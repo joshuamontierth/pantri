@@ -41,7 +41,10 @@ Extract it for a shopping list.
   - item: what you'd buy at a store, in plain words, without prep words like chopped, minced, divided or softened.
   - amount: the number exactly as written, like 2, 1/2, 1 1/2 or 0.75. For a range like 4-5 use the larger number. \
 Empty if there is no amount.
-  - unit: like cup, tbsp, tsp, lb, oz, clove, can, stalk, loaf or pinch. Empty for a plain count like 3 avocados.
+  - unit: like cup, tbsp, tsp, lb, oz, clove, can, stalk or loaf. Empty for a plain count like 3 avocados.
+  - For a pinch, dash, splash, sprinkle or "to taste", leave both amount and unit empty.
+  - For "juice of 1/2 lime" or "zest of 1 lemon", the item is the fruit itself (Lime, Lemon) with that count and an empty unit.
+  - When an ingredient offers a choice ("lime or lemon", "French or GF bread"), list only the first option, once.
 - Leave out water and ice. Ignore cooking directions.
 """
 
