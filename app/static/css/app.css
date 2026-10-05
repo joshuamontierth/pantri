@@ -550,6 +550,59 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 .choice-text strong { font-size: 17px; font-weight: 700; }
 .choice-text span { font-size: 14px; color: var(--ink-2); }
 
+/* in-app camera (HTTPS only) */
+.camera {
+  width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; background: #000; color: #fff; overflow: hidden;
+}
+.camera[open] { display: block; }
+.camera::backdrop { background: #000; }
+/* contain, not cover: the preview shows exactly what the photo will hold */
+.camera video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.camera-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.camera.flash .camera-flash { animation: camera-flash 260ms ease-out; }
+@keyframes camera-flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+.camera-top {
+  position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+}
+.camera-btn {
+  flex: none; width: 46px; height: 46px; display: grid; place-content: center; border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer;
+}
+.camera-btn[aria-pressed="true"] { background: #fff; color: #000; }
+.camera-btn[hidden] { display: grid !important; visibility: hidden; }
+.camera-hint { flex: 1; text-align: center; font-size: 15px; font-weight: 600; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+.camera-problem {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(320px, 86vw);
+  display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center;
+  padding: 22px; border-radius: 16px; background: rgba(28, 27, 24, 0.92); font-size: 15px;
+}
+.camera-problem .btn { color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.camera-bottom {
+  position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+  padding: 20px 16px calc(26px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.55) 40%);
+}
+.camera-shots { display: flex; gap: 6px; flex-wrap: wrap; }
+.shot {
+  width: 46px; height: 46px; padding: 0; border: 2px solid #fff; border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: #222; animation: pop 300ms var(--ease);
+}
+.shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.shutter {
+  width: 78px; height: 78px; border-radius: 50%; border: 4px solid #fff; background: transparent; cursor: pointer;
+  box-shadow: inset 0 0 0 4px transparent; position: relative; transition: transform 120ms var(--ease);
+}
+.shutter::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #fff; }
+.shutter:active { transform: scale(0.92); }
+.shutter[disabled] { opacity: 0.4; cursor: default; transform: none; }
+.camera-done {
+  justify-self: end; min-height: 48px; padding: 0 16px; border-radius: 999px; border: 0;
+  background: #fff; color: #000; font-weight: 700;
+}
+.camera-done[disabled] { opacity: 0; pointer-events: none; }
+
 /* ---------- recipe editor ---------- */
 .ing-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
 .ing-head .section-label { margin: 0; }

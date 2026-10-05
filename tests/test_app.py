@@ -650,3 +650,5 @@ def test_scan_offers_camera_and_library(make_user):
     page = alice.get(f"/h/{hid}/recipes").text
     assert 'capture="environment"' in page and "Take a photo" in page and "Choose photos" in page
     assert 'id="scan-library"' in page and 'for="scan-library"' in page
+    # In-app camera (used over HTTPS), with the camera app as a fallback.
+    assert "data-camera" in page and "data-camera-shutter" in page and "data-camera-native" in page

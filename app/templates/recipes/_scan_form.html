@@ -9,7 +9,7 @@
     <h2 class="sheet-title" id="scan-sheet-title">Scan a recipe</h2>
     <p class="field-hint">Up to {{ MAX_PHOTOS }} photos, like the front and back of a card.</p>
     <div class="choices">
-      <label class="choice">
+      <label class="choice" data-take-photo>
         <span class="choice-icon">{{ icon("camera", 22) }}</span>
         <span class="choice-text"><strong>Take a photo</strong><span>Open the camera</span></span>
         <input type="file" name="photos" accept="image/*" capture="environment" hidden data-scan-input>
@@ -20,6 +20,25 @@
       </label>
     </div>
     <button type="button" class="btn block" data-scan-cancel>Cancel</button>
+  </dialog>
+
+  <dialog class="camera" data-camera aria-label="Camera">
+    <video playsinline muted autoplay></video>
+    <div class="camera-flash" aria-hidden="true"></div>
+    <div class="camera-top">
+      <button type="button" class="camera-btn" data-camera-close aria-label="Close camera">{{ icon("x", 24, 2.2) }}</button>
+      <span class="camera-hint" data-camera-hint aria-live="polite"></span>
+      <button type="button" class="camera-btn" data-camera-torch aria-label="Flashlight" aria-pressed="false" hidden>{{ icon("bolt", 22, 2) }}</button>
+    </div>
+    <div class="camera-problem" data-camera-problem hidden>
+      <p></p>
+      <button type="button" class="btn" data-camera-native>Use the camera app</button>
+    </div>
+    <div class="camera-bottom">
+      <div class="camera-shots" data-camera-shots></div>
+      <button type="button" class="shutter" data-camera-shutter aria-label="Take photo" disabled></button>
+      <button type="button" class="btn camera-done" data-camera-done disabled>Read recipe</button>
+    </div>
   </dialog>
 </form>
 <div class="scan-overlay" role="status" aria-live="polite" hidden>

@@ -91,14 +91,163 @@
   });
 
   // ---------- scan a recipe photo ----------
-  // Phones and tablets get a choice of camera or library. Worked out up front so the tap that opens
-  // the file picker stays a direct user gesture (browsers refuse to open it after an await).
+  const MAX_SHOTS = 4;
+  // A live camera view needs HTTPS (or localhost). Over plain http, "Take a photo" opens the phone's camera app.
+  const liveCamera = !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  // Offer the camera on touch devices, and on any device where the browser reports a camera.
+  // Worked out up front so the tap that opens a file picker stays a direct user gesture.
   let offerCamera = window.matchMedia("(pointer: coarse)").matches;
-  if (offerCamera && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-    // Only available on HTTPS/localhost; over plain http we trust the touch screen.
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
     navigator.mediaDevices.enumerateDevices()
-      .then((devices) => { offerCamera = devices.some((d) => d.kind === "videoinput"); })
+      .then((devices) => { if (devices.some((d) => d.kind === "videoinput")) offerCamera = true; })
       .catch(() => {});
+  }
+
+  function submitScan(form, input) {
+    // Only send the input that holds the photos.
+    form.querySelectorAll("[data-scan-input]").forEach((other) => { if (other !== input) other.disabled = true; });
+    form.querySelectorAll("dialog[open]").forEach((d) => d.close());
+    const overlay = form.nextElementSibling;
+    if (overlay && overlay.classList.contains("scan-overlay")) overlay.hidden = false;
+    form.submit();
+  }
+
+  function cameraFor(form) {
+    if (form._camera !== undefined) return form._camera;
+    const dialog = form.querySelector("[data-camera]");
+    if (!liveCamera || !dialog) return (form._camera = null);
+    const video = dialog.querySelector("video");
+    const shotsEl = dialog.querySelector("[data-camera-shots]");
+    const shutter = dialog.querySelector("[data-camera-shutter]");
+    const done = dialog.querySelector("[data-camera-done]");
+    const torch = dialog.querySelector("[data-camera-torch]");
+    const hint = dialog.querySelector("[data-camera-hint]");
+    const problem = dialog.querySelector("[data-camera-problem]");
+    let stream = null;
+    let shots = [];
+    let torchOn = false;
+
+    function render() {
+      shotsEl.replaceChildren(...shots.map((shot, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "shot";
+        b.setAttribute("aria-label", "Remove photo " + (i + 1));
+        const img = document.createElement("img");
+        img.src = shot.url;
+        img.alt = "";
+        b.appendChild(img);
+        b.addEventListener("click", () => {
+          URL.revokeObjectURL(shot.url);
+          shots.splice(i, 1);
+          render();
+        });
+        return b;
+      }));
+      done.disabled = shots.length === 0;
+      done.textContent = shots.length > 1 ? "Read " + shots.length + " photos" : "Read recipe";
+      shutter.disabled = !stream || shots.length >= MAX_SHOTS;
+      hint.textContent = shots.length >= MAX_SHOTS ? MAX_SHOTS + " photos is the most" :
+        shots.length ? "Add another photo, or tap Read" : "Get the ingredients in view";
+    }
+
+    function stop() {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      video.srcObject = null;
+      torchOn = false;
+    }
+
+    function clear() {
+      shots.forEach((s) => URL.revokeObjectURL(s.url));
+      shots = [];
+    }
+
+    async function open() {
+      clear();
+      problem.hidden = true;
+      torch.hidden = true;
+      dialog.showModal();
+      render();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 2560 }, height: { ideal: 1920 } },
+        });
+        video.srcObject = stream;
+        await video.play();
+        const track = stream.getVideoTracks()[0];
+        const caps = track.getCapabilities ? track.getCapabilities() : {};
+        torch.hidden = !caps.torch;
+      } catch (err) {
+        stop();
+        problem.querySelector("p").textContent = err && err.name === "NotAllowedError"
+          ? "Camera access is blocked for this site. Allow it in your browser's site settings, or use your camera app."
+          : "The camera couldn't start. You can use your camera app instead.";
+        problem.hidden = false;
+      }
+      render();
+    }
+
+    async function grabFrame() {
+      const track = stream.getVideoTracks()[0];
+      // Full-resolution still where the browser supports it (sharper text), else the current video frame.
+      if (window.ImageCapture) {
+        try { return await new ImageCapture(track).takePhoto(); } catch (_) { /* fall back */ }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    }
+
+    shutter.addEventListener("click", async () => {
+      if (!stream || shots.length >= MAX_SHOTS || shutter._busy) return;
+      shutter._busy = true;
+      dialog.classList.remove("flash");
+      void dialog.offsetWidth; // restart the flash animation
+      dialog.classList.add("flash");
+      buzz(15);
+      try {
+        const blob = await grabFrame();
+        if (blob) {
+          const file = new File([blob], "scan-" + (shots.length + 1) + ".jpg", { type: blob.type || "image/jpeg" });
+          shots.push({ file, url: URL.createObjectURL(file) });
+        }
+      } finally {
+        shutter._busy = false;
+        render();
+      }
+    });
+
+    done.addEventListener("click", () => {
+      if (!shots.length) return;
+      const input = form.querySelector("[data-scan-library]");
+      const dt = new DataTransfer();
+      shots.forEach((s) => dt.items.add(s.file));
+      input.files = dt.files;
+      stop();
+      submitScan(form, input);
+    });
+
+    torch.addEventListener("click", () => {
+      const track = stream && stream.getVideoTracks()[0];
+      if (!track) return;
+      torchOn = !torchOn;
+      track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => { torchOn = false; });
+      torch.setAttribute("aria-pressed", torchOn ? "true" : "false");
+    });
+
+    dialog.querySelector("[data-camera-close]").addEventListener("click", () => dialog.close());
+    dialog.querySelector("[data-camera-native]").addEventListener("click", () => {
+      dialog.close();
+      form.querySelector("input[capture]").click();
+    });
+    // However it closes (X, Escape, back gesture), let go of the camera.
+    dialog.addEventListener("close", () => { stop(); clear(); });
+
+    return (form._camera = { open });
   }
 
   document.addEventListener("click", (e) => {
@@ -107,6 +256,18 @@
       const form = button.form;
       if (offerCamera) form.querySelector(".scan-sheet").showModal();
       else form.querySelector("[data-scan-library]").click();
+      return;
+    }
+    // "Take a photo": the in-app camera when we can, otherwise the label opens the phone's camera app.
+    const takePhoto = e.target.closest("[data-take-photo]");
+    // (A click aimed at the file input itself is the camera-app fallback; let it through.)
+    if (takePhoto && !e.target.matches("input[type=file]")) {
+      const camera = cameraFor(takePhoto.closest("form"));
+      if (camera) {
+        e.preventDefault();
+        takePhoto.closest("dialog").close();
+        camera.open();
+      }
       return;
     }
     if (e.target.closest("[data-scan-cancel]")) {
@@ -121,23 +282,16 @@
     }
   });
 
-  // Upload as soon as photos are taken or picked.
+  // Upload as soon as photos are picked (library, or the phone's camera app).
   document.addEventListener("change", (e) => {
     const input = e.target.closest("[data-scan-input]");
     if (!input || !input.files.length) return;
-    const form = input.form;
-    if (input.files.length > 4) {
-      toast("Use up to 4 photos at a time.", true);
+    if (input.files.length > MAX_SHOTS) {
+      toast("Use up to " + MAX_SHOTS + " photos at a time.", true);
       input.value = "";
       return;
     }
-    // Only send the input that has photos in it.
-    form.querySelectorAll("[data-scan-input]").forEach((other) => { if (other !== input) other.disabled = true; });
-    const sheet = form.querySelector(".scan-sheet");
-    if (sheet && sheet.open) sheet.close();
-    const overlay = form.nextElementSibling;
-    if (overlay && overlay.classList.contains("scan-overlay")) overlay.hidden = false;
-    form.submit();
+    submitScan(input.form, input);
   });
   // Coming back with the browser's back button shouldn't leave the reading screen up.
   window.addEventListener("pageshow", () => {
