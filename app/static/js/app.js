@@ -90,7 +90,38 @@
     });
   });
 
-  // ---------- scan a recipe photo: upload as soon as photos are picked ----------
+  // ---------- scan a recipe photo ----------
+  // Phones and tablets get a choice of camera or library. Worked out up front so the tap that opens
+  // the file picker stays a direct user gesture (browsers refuse to open it after an await).
+  let offerCamera = window.matchMedia("(pointer: coarse)").matches;
+  if (offerCamera && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    // Only available on HTTPS/localhost; over plain http we trust the touch screen.
+    navigator.mediaDevices.enumerateDevices()
+      .then((devices) => { offerCamera = devices.some((d) => d.kind === "videoinput"); })
+      .catch(() => {});
+  }
+
+  document.addEventListener("click", (e) => {
+    const button = e.target.closest("[data-scan-button]");
+    if (button) {
+      const form = button.form;
+      if (offerCamera) form.querySelector(".scan-sheet").showModal();
+      else form.querySelector("[data-scan-library]").click();
+      return;
+    }
+    if (e.target.closest("[data-scan-cancel]")) {
+      e.target.closest("dialog").close();
+      return;
+    }
+    // Tap outside the sheet closes it.
+    const sheet = e.target.closest(".scan-sheet");
+    if (sheet && e.target === sheet) {
+      const r = sheet.getBoundingClientRect();
+      if (e.clientY < r.top || e.clientY > r.bottom || e.clientX < r.left || e.clientX > r.right) sheet.close();
+    }
+  });
+
+  // Upload as soon as photos are taken or picked.
   document.addEventListener("change", (e) => {
     const input = e.target.closest("[data-scan-input]");
     if (!input || !input.files.length) return;
@@ -100,6 +131,10 @@
       input.value = "";
       return;
     }
+    // Only send the input that has photos in it.
+    form.querySelectorAll("[data-scan-input]").forEach((other) => { if (other !== input) other.disabled = true; });
+    const sheet = form.querySelector(".scan-sheet");
+    if (sheet && sheet.open) sheet.close();
     const overlay = form.nextElementSibling;
     if (overlay && overlay.classList.contains("scan-overlay")) overlay.hidden = false;
     form.submit();
@@ -107,6 +142,7 @@
   // Coming back with the browser's back button shouldn't leave the reading screen up.
   window.addEventListener("pageshow", () => {
     document.querySelectorAll(".scan-overlay").forEach((o) => { o.hidden = true; });
+    document.querySelectorAll("[data-scan-input]").forEach((i) => { i.disabled = false; i.value = ""; });
   });
 
   // ---------- rank picker (tap stores in order) ----------

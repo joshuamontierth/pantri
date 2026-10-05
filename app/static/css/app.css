@@ -532,6 +532,23 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
   border: 3px solid var(--rule-2); border-top-color: var(--accent); animation: spin 800ms linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.scan-sheet { display: none; }
+.scan-sheet[open] { display: flex; flex-direction: column; gap: 12px; }
+.sheet-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.choices { display: flex; flex-direction: column; gap: 10px; margin: 4px 0; }
+.choice {
+  display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 10px 16px;
+  border: 1px solid var(--rule-2); border-radius: 14px; background: var(--sheet-field); cursor: pointer;
+  transition: transform 120ms var(--ease), border-color 120ms;
+}
+.choice:active { transform: scale(0.98); border-color: var(--accent); }
+.choice-icon {
+  flex: none; width: 44px; height: 44px; display: grid; place-content: center; border-radius: 12px;
+  background: var(--accent-wash); color: var(--accent);
+}
+.choice-text { display: flex; flex-direction: column; gap: 1px; }
+.choice-text strong { font-size: 17px; font-weight: 700; }
+.choice-text span { font-size: 14px; color: var(--ink-2); }
 
 /* ---------- recipe editor ---------- */
 .ing-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }

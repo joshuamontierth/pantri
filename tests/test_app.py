@@ -642,3 +642,11 @@ def test_scanned_pinches_are_blank_and_recipe_saves(make_user, monkeypatch):
         recipe = s.query(models.Recipe).one()
         assert [(i.catalog_item.name, i.amount) for i in recipe.ingredients] == [
             ("Avocados", 3.0), ("Cayenne pepper", None), ("Salt", None), ("Pepper", None), ("Lime juice", None)]
+
+
+def test_scan_offers_camera_and_library(make_user):
+    alice = make_user("alice")
+    hid = alice.create_household()
+    page = alice.get(f"/h/{hid}/recipes").text
+    assert 'capture="environment"' in page and "Take a photo" in page and "Choose photos" in page
+    assert 'id="scan-library"' in page and 'for="scan-library"' in page

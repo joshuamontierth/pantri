@@ -1,11 +1,26 @@
-{# "Scan" button: pick or take photos, upload, and wait on the reading screen. Needs household. #}
+{# "Scan" button. Phones get a choice of camera or photo library; computers go straight to the file picker. #}
 {% if scan_enabled() %}
 <form method="post" action="/h/{{ household.id }}/recipes/scan" enctype="multipart/form-data" class="scan-form" data-scan-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="btn small{{ ' ' ~ scan_class if scan_class }}">
-    {{ icon("camera", 18) }}{{ scan_label or "Scan" }}
-    <input type="file" name="photos" accept="image/*" multiple hidden data-scan-input aria-label="Photos of a recipe, up to {{ MAX_PHOTOS }}">
-  </label>
+  <button type="button" class="btn small{{ ' ' ~ scan_class if scan_class }}" data-scan-button>{{ icon("camera", 18) }}{{ scan_label or "Scan" }}</button>
+  <input type="file" id="scan-library" name="photos" accept="image/*" multiple hidden data-scan-input data-scan-library>
+  <dialog class="sheet scan-sheet" aria-labelledby="scan-sheet-title">
+    <div class="sheet-grabber" aria-hidden="true"></div>
+    <h2 class="sheet-title" id="scan-sheet-title">Scan a recipe</h2>
+    <p class="field-hint">Up to {{ MAX_PHOTOS }} photos, like the front and back of a card.</p>
+    <div class="choices">
+      <label class="choice">
+        <span class="choice-icon">{{ icon("camera", 22) }}</span>
+        <span class="choice-text"><strong>Take a photo</strong><span>Open the camera</span></span>
+        <input type="file" name="photos" accept="image/*" capture="environment" hidden data-scan-input>
+      </label>
+      <label class="choice" for="scan-library">
+        <span class="choice-icon">{{ icon("image", 22) }}</span>
+        <span class="choice-text"><strong>Choose photos</strong><span>From your photo library</span></span>
+      </label>
+    </div>
+    <button type="button" class="btn block" data-scan-cancel>Cancel</button>
+  </dialog>
 </form>
 <div class="scan-overlay" role="status" aria-live="polite" hidden>
   <div class="scan-card">
