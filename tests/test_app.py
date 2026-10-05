@@ -525,3 +525,87 @@ def test_gear_menu_and_household_switching(make_user):
     settings = alice.get(f"/h/{home}/settings").text
     assert f'href="/h/{cabin}"' in settings and f'href="/h/{home}" aria-current="page"' in settings
     assert "New household or invites" in settings and "Log out" in settings
+
+
+def _jpeg_bytes(w=640, h=480):
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (w, h), (240, 230, 220)).save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def test_scan_recipe_prefills_editor(make_user, monkeypatch):
+    from app import scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    costco = alice.add_store(hid, "Costco")
+    alice.post(f"/h/{hid}/catalog", {"name": "Salt", "ranks": str(costco)})
+
+    seen = {}
+
+    def fake_model(photos, catalog_names):
+        seen["photos"], seen["catalog"] = photos, catalog_names
+        return {"name": "Guacamole", "ingredients": [
+            {"item": "avocados", "amount": "3", "unit": ""},
+            {"item": "salt", "amount": "1", "unit": "tsp."},
+            {"item": "garlic", "amount": "4-5", "unit": "cloves"},
+            {"item": "cilantro", "amount": "", "unit": ""},
+        ]}
+
+    monkeypatch.setattr(scan, "_ask_model", fake_model)
+    r = alice.client.post(
+        f"/h/{hid}/recipes/scan", data={"csrf_token": alice.csrf},
+        files=[("photos", ("front.jpg", _jpeg_bytes(4000, 3000), "image/jpeg")),
+               ("photos", ("back.jpg", _jpeg_bytes(), "image/jpeg"))],
+    )
+    assert r.status_code == 200, r.text[:500]
+    assert len(seen["photos"]) == 2 and seen["catalog"] == ["Salt"]
+    page = r.text
+    assert 'value="Guacamole"' in page and "Read from your photos" in page
+    assert 'value="Avocados"' in page and 'value="Salt"' in page  # catalog spelling wins
+    assert 'value="5"' in page and 'value="clove"' in page and 'value="tsp"' in page
+    # Nothing saved until the user presses Save.
+    with session() as s:
+        assert s.query(models.Recipe).count() == 0
+
+    # The downscaled photo is a JPEG no bigger than 1600px.
+    import base64
+    import io
+
+    from PIL import Image
+    img = Image.open(io.BytesIO(base64.b64decode(seen["photos"][0])))
+    assert max(img.size) == 1600
+
+
+def test_scan_recipe_errors(make_user, monkeypatch):
+    from app import scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+
+    def down(photos, catalog_names):
+        raise scan.ScanError("Couldn't reach the recipe reader.")
+
+    monkeypatch.setattr(scan, "_ask_model", down)
+    r = alice.client.post(f"/h/{hid}/recipes/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", ("a.jpg", _jpeg_bytes(), "image/jpeg"))])
+    assert r.status_code == 400 and "Couldn&#39;t reach the recipe reader" in r.text
+
+    r = alice.client.post(f"/h/{hid}/recipes/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", ("a.jpg", b"not an image", "image/jpeg"))])
+    assert r.status_code == 400 and "isn&#39;t a photo" in r.text
+
+    r = alice.client.post(f"/h/{hid}/recipes/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", (f"{i}.jpg", _jpeg_bytes(), "image/jpeg")) for i in range(5)])
+    assert r.status_code == 400 and "up to 4 photos" in r.text
+
+    # Without the CSRF token the upload is refused.
+    r = alice.client.post(f"/h/{hid}/recipes/scan", files=[("photos", ("a.jpg", _jpeg_bytes(), "image/jpeg"))])
+    assert r.status_code == 403
+
+    monkeypatch.setattr("app.config.OLLAMA_URL", "")
+    assert "data-scan-form" not in alice.get(f"/h/{hid}/recipes").text

@@ -1,0 +1,17 @@
+{# "Scan" button: pick or take photos, upload, and wait on the reading screen. Needs household. #}
+{% if scan_enabled() %}
+<form method="post" action="/h/{{ household.id }}/recipes/scan" enctype="multipart/form-data" class="scan-form" data-scan-form>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="btn small{{ ' ' ~ scan_class if scan_class }}">
+    {{ icon("camera", 18) }}{{ scan_label or "Scan" }}
+    <input type="file" name="photos" accept="image/*" multiple hidden data-scan-input aria-label="Photos of a recipe, up to {{ MAX_PHOTOS }}">
+  </label>
+</form>
+<div class="scan-overlay" role="status" aria-live="polite" hidden>
+  <div class="scan-card">
+    <span class="spinner" aria-hidden="true"></span>
+    <p class="state-title">Reading the recipe</p>
+    <p class="state-text">This usually takes a few seconds.</p>
+  </div>
+</div>
+{% endif %}

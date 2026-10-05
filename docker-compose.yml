@@ -10,6 +10,9 @@ services:
     environment:
       # Set to "true" if you serve the site over HTTPS (e.g. behind a TLS reverse proxy).
       COOKIE_SECURE: "false"
+      # Vision model for "Scan" on the Recipes page. Set OLLAMA_URL to "" to hide it.
+      OLLAMA_URL: "http://ollama.example.com:11434"
+      OLLAMA_MODEL: "gemma4:26b-a4b-it-qat"
 
 volumes:
   shopping-data:

@@ -515,6 +515,24 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 }
 .chip.ranked .rank-badge { display: inline-grid; animation: pop 300ms var(--ease); }
 
+/* ---------- scanning a recipe photo ---------- */
+.head-actions { display: flex; gap: 8px; align-items: center; }
+.scan-form { display: contents; }
+.scan-form label { cursor: pointer; }
+.scan-overlay {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-content: center; padding: 24px;
+  background: var(--scrim); animation: fade 160ms ease-out;
+}
+.scan-card {
+  width: min(320px, 86vw); display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 30px 24px; border-radius: 18px; background: var(--sheet-bg); text-align: center; box-shadow: var(--pop-shadow);
+}
+.spinner {
+  width: 40px; height: 40px; margin-bottom: 8px; border-radius: 50%;
+  border: 3px solid var(--rule-2); border-top-color: var(--accent); animation: spin 800ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ---------- recipe editor ---------- */
 .ing-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
 .ing-head .section-label { margin: 0; }

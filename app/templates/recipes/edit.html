@@ -25,7 +25,11 @@
 {% set hid = household.id %}
 <div class="narrow">
   <a class="back-link" href="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}">{{ icon("chevron-left", 18) }}{{ recipe.name if recipe else "Recipes" }}</a>
-  <h1 class="page-title">{{ "Edit recipe" if recipe else "New recipe" }}</h1>
+  <div class="page-head">
+    <h1 class="page-title">{{ "Edit recipe" if recipe else "New recipe" }}</h1>
+    {% if not recipe and not notice %}{% set scan_label = "From photo" %}{% include "recipes/_scan_form.html" %}{% endif %}
+  </div>
+  {% if notice %}<p class="alert info">{{ notice }}</p>{% endif %}
   {% for e in errors %}<p class="alert error">{{ e }}</p>{% endfor %}
   <form method="post" action="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}" class="stack" id="recipe-form" data-recipe-editor>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

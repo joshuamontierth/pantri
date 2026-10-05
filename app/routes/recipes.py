@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from .. import quantities, services
+import re
+
+from .. import quantities, scan, services
 from ..db import get_db
 from ..deps import form_data, household_member
 from ..models import Household, Membership, Recipe, RecipeIngredient
@@ -45,7 +47,7 @@ def _rows_from_recipe(recipe):
     ]
 
 
-def _editor(request, db, membership, recipe=None, name="", rows=None, errors=None, status_code=200):
+def _editor(request, db, membership, recipe=None, name="", rows=None, errors=None, notice=None, status_code=200):
     hid = membership.household_id
     catalog = services.catalog_items(db, hid)
     return render(
@@ -56,6 +58,7 @@ def _editor(request, db, membership, recipe=None, name="", rows=None, errors=Non
             "name": name,
             "rows": rows if rows is not None else [],
             "errors": errors or [],
+            "notice": notice,
             "stores": services.household_stores(db, hid),
             "catalog_json": {c.name_lower: {"name": c.name, "ranks": c.ranked_store_ids} for c in catalog},
         },
@@ -126,10 +129,64 @@ def _save_ingredients(db, household_id, recipe, parsed):
     db.expire(recipe, ["ingredients"])
 
 
+def _recipes_page(request, db, membership, scan_error=None, status_code=200):
+    recipes = db.query(Recipe).filter_by(household_id=membership.household_id).order_by(Recipe.name).all()
+    return render(request, "recipes/index.html", {"recipes": recipes, "scan_error": scan_error},
+                  db=db, membership=membership, status_code=status_code)
+
+
 @router.get("/h/{household_id}/recipes")
 def recipes_page(request: Request, household_id: int, membership=Depends(household_member), db: Session = Depends(get_db)):
-    recipes = db.query(Recipe).filter_by(household_id=household_id).order_by(Recipe.name).all()
-    return render(request, "recipes/index.html", {"recipes": recipes}, db=db, membership=membership)
+    return _recipes_page(request, db, membership)
+
+
+def _clean_scanned_amount(amount_text, unit_text):
+    """Tidy what the model read ("1-2", "Tbsp.", "cloves") into what the editor expects."""
+    amount_text = amount_text.strip()
+    rng = re.match(r"^(.+?)\s*(?:-|–|to)\s*(.+)$", amount_text)
+    if rng:
+        amount_text = rng.group(2)  # ranges: buy enough for the larger amount
+    if not amount_text:
+        return "", ""
+    unit = quantities.unit_label(quantities.normalize_unit(unit_text))
+    try:
+        value = quantities.parse_amount(amount_text)
+    except ValueError:
+        return amount_text, unit  # leave it for the user to fix in the editor
+    return (quantities.amount_input_text(value) if value else amount_text), unit
+
+
+@router.post("/h/{household_id}/recipes/scan")
+def scan_recipe(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
+    """Read a recipe from photos and open it in the editor for review. Nothing is saved yet."""
+    if not scan.enabled():
+        raise HTTPException(404, "Reading recipes from photos isn't set up on this server.")
+    photos = [f for f in form.getlist("photos") if hasattr(f, "file") and f.filename]
+    if len(photos) > scan.MAX_PHOTOS:
+        return _recipes_page(request, db, membership, f"Use up to {scan.MAX_PHOTOS} photos at a time.", 400)
+    catalog = services.catalog_items(db, household_id)
+    try:
+        data = scan.read_recipe([f.file.read(scan.MAX_PHOTO_BYTES + 1) for f in photos], [c.name for c in catalog])
+    except scan.ScanError as e:
+        return _recipes_page(request, db, membership, str(e), 400)
+
+    by_name = {c.name_lower: c for c in catalog}
+    rows = []
+    for ing in data["ingredients"]:
+        known = by_name.get(ing["item"].lower())
+        amount, unit = _clean_scanned_amount(ing["amount"], ing["unit"])
+        rows.append({
+            "name": known.name if known else ing["item"][:1].upper() + ing["item"][1:],
+            "amount": amount,
+            "unit": unit,
+            "ranks": known.ranked_store_ids if known else [],
+            "dirty": False,
+        })
+    n = len(photos)
+    return _editor(
+        request, db, membership, name=data["name"], rows=rows,
+        notice=f"Read from your photo{'s' if n != 1 else ''}. Check the ingredients and stores, then save.",
+    )
 
 
 @router.get("/h/{household_id}/recipes/new")

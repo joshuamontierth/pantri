@@ -90,6 +90,25 @@
     });
   });
 
+  // ---------- scan a recipe photo: upload as soon as photos are picked ----------
+  document.addEventListener("change", (e) => {
+    const input = e.target.closest("[data-scan-input]");
+    if (!input || !input.files.length) return;
+    const form = input.form;
+    if (input.files.length > 4) {
+      toast("Use up to 4 photos at a time.", true);
+      input.value = "";
+      return;
+    }
+    const overlay = form.nextElementSibling;
+    if (overlay && overlay.classList.contains("scan-overlay")) overlay.hidden = false;
+    form.submit();
+  });
+  // Coming back with the browser's back button shouldn't leave the reading screen up.
+  window.addEventListener("pageshow", () => {
+    document.querySelectorAll(".scan-overlay").forEach((o) => { o.hidden = true; });
+  });
+
   // ---------- rank picker (tap stores in order) ----------
   function setRanks(picker, ids) {
     picker.querySelector("[data-rank-input]").value = ids.join(",");
