@@ -41,7 +41,8 @@
 - Catalog page: create, rename, edit rankings, delete (blocked if used by a recipe; shows which).
 
 ## Recipes (per household)
-- Fields: name, ingredients (catalog item + optional quantity + unit).
+- Fields: name, ingredients (catalog item + optional quantity + unit), directions (free text, shown as numbered steps), optional link to the source.
+- **Import** from photos (camera or library, up to 4, read by a vision model) or from a link to a recipe page (schema.org data, else the page text). Opens the editor prefilled; nothing is saved until Save.
 - Typing an ingredient not in the catalog creates it inline, with store rankings settable right in the recipe editor.
 - **Copy recipe** to another household you belong to: ingredients match that household's catalog by name, or are created there with no rankings.
 

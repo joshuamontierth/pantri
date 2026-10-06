@@ -7,8 +7,9 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Households:** shared groups of lists. Invite people by username. A household can have several admins, and you can belong to more than one household. The gear in the top bar opens settings, including switching households.
 - **Stores and lists:** one list per store, plus an "Other" list for items without a store. Swipe between stores. Drag to reorder, tap to check off, then "Clear checked" (with undo). New items go to the store you're viewing; suggestions offer a one-tap "+ usual store" when an item normally comes from somewhere else. Changes from other people appear live.
 - **Catalog:** each item has a ranked list of stores (1st, 2nd, 3rd…). Filter by store, or by "Other" to find items that still need one; the filter is remembered.
-- **Recipes:** ingredients have amounts and units. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups).
-- **Scan a recipe:** take or pick photos of a recipe card and a vision model fills in the recipe for you to check and save. See [Scanning recipes](#scanning-recipes).
+- **Recipes:** ingredients have amounts and units, plus directions and an optional link to where the recipe came from. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups).
+- **Cooking:** the recipe page shows the directions as numbered steps. Tap a step to mark it done, and turn on **Keep screen on** so the phone doesn't dim while you cook.
+- **Import a recipe:** from photos of a recipe card or cookbook (ingredients and directions can be in different photos), or from a link to a recipe website. It opens filled in for you to check and save. See [Importing recipes](#importing-recipes).
 
 ## Run it (Docker)
 
@@ -29,7 +30,7 @@ Then open `http://<server-ip>:8000`, sign up, create a household, and add your s
 docker compose up -d --build
 ```
 
-Tables are created automatically on start. There is no migration tool yet, so back up first if a future change alters existing tables.
+Tables are created automatically on start, and new columns are added to existing tables. There is no migration tool for other changes, so back up first.
 
 ### Backups
 
@@ -48,7 +49,7 @@ The app runs on the server from `~/shopping_list`, on port 8000.
 | Address | Notes |
 | --- | --- |
 | https://shopping.example.com | Use this one. HTTPS through `tailscale serve`; needed for the in-app camera. |
-| http://shopping.example.com:8000 | Plain HTTP, still works. Scanning falls back to the phone's camera app here. |
+| http://shopping.example.com:8000 | Plain HTTP, still works. Taking a photo falls back to the phone's camera app here. |
 
 Logins are per address, so log in once on each.
 
@@ -72,25 +73,38 @@ The machine may serve other things through `tailscale serve` too.
 - Remove only the shopping list's HTTPS: `tailscale serve --https=443 off`
 - **Never run `tailscale serve reset`**: it also removes everything else `tailscale serve` serves.
 
-## Scanning recipes
+## Importing recipes
 
-On the Recipes page, tap **Scan** (or **From photo** on a new recipe).
+On the Recipes page, tap **Import** (it's also on the New recipe page). After a few seconds the recipe editor opens filled in: name, ingredients, directions and, for links, the link. Ingredients that match your catalog use its spelling and stores; new ones are marked so you can tap their stores. Nothing is saved until you press **Save**.
 
-- **Take a photo:** over HTTPS this opens a camera inside the app. Take up to 4 shots (front and back of a card), tap a thumbnail to drop it, use the flashlight button if your phone has one, then tap **Read recipe**. Over plain HTTP, or if camera access is blocked, it opens the phone's camera app instead.
-- **Choose photos:** pick up to 4 from your photo library.
-- On a computer without a camera, Scan opens the file picker directly.
+### From photos
 
-After a few seconds the recipe editor opens filled in. Ingredients that match your catalog use its spelling and stores; new ones are marked so you can tap their stores. Nothing is saved until you press **Save**.
+- **Take a photo:** over HTTPS this opens a camera inside the app. Take up to 4 shots, tap a thumbnail to drop it, use the flashlight button if your phone has one, then tap **Read recipe**. Over plain HTTP, or if camera access is blocked, it opens the phone's camera app instead. Computers without a camera don't show this option.
+- **Choose photos:** pick up to 4 from your photo library. Screenshots work too.
 
-How the model is asked to read cards:
+The photos can be different parts of one recipe, like the ingredients on one page and the directions on the next. The photos are straightened, shrunk to 1600px and sent to the model; they aren't stored on the server.
 
-- Ingredient names are what you'd buy, without prep words like "chopped" or "minced".
-- Ranges use the larger number ("4-5 cloves" becomes 5).
+### From a link
+
+**Paste a link** takes a recipe page's address (share text with a link in it works too).
+
+- Most recipe sites (Allrecipes, NYT Cooking, Food Network, BBC Good Food, King Arthur, Serious Eats and many blogs) publish the recipe as structured data. The ingredient lines and steps are taken from that exactly, and the model only tidies the ingredient lines.
+- For a page without that data, the model reads the page's text.
+- Some sites (Budget Bytes and Sally's Baking Addiction, for example) block servers from reading their pages. Take screenshots of the recipe and use **Choose photos** instead.
+- The server only fetches public websites. Links to `localhost`, your home network or tailnet addresses are refused.
+- Without a model configured, links still work for sites with structured data, with simpler ingredient parsing.
+
+### How the model reads recipes
+
+- Ingredient names are what you'd buy, without prep words like "chopped" or "minced". They match catalog items only when it's the same product, so cake flour stays separate from Flour.
+- Ranges use the larger number ("4-5 cloves" becomes 5), and package sizes are dropped ("1 (16 ounce) package bacon" becomes 1 package).
 - A pinch, dash or "to taste" is left blank, as is any amount that isn't a number, so the recipe always saves.
-- "Juice of 1/2 lime" becomes 1/2 Lime; "lime or lemon" keeps the first option.
-- Water and cooking directions are left out.
+- "Juice of 1/2 lime" becomes 1/2 Lime; "lime or lemon" keeps the first option; "salt and pepper" becomes two items.
+- Water is left out of the ingredients. Directions are copied word for word, one step per numbered step or paragraph.
 
-The photos are straightened, shrunk to 1600px and sent to the model; they aren't stored on the server.
+### Directions format
+
+Directions are plain text. In the editor, number the steps or leave a blank line between them; each becomes a numbered step on the recipe page. A short line ending in a colon, like "For the sauce:", becomes a heading. A single paragraph is shown as written.
 
 ### Configuration
 
@@ -98,11 +112,12 @@ Set these in `docker-compose.yml`:
 
 | Variable | Default | |
 | --- | --- | --- |
-| `OLLAMA_URL` | `http://ollama.example.com:11434` | Ollama server. Set to `""` to hide Scan. |
+| `OLLAMA_URL` | `http://ollama.example.com:11434` | Ollama server. Set to `""` to turn off reading photos (links still work). |
 | `OLLAMA_MODEL` | `gemma4:26b-a4b-it-qat` | Any Ollama model with vision. |
 | `OLLAMA_TIMEOUT` | `300` | Seconds to wait for an answer. |
+| `OLLAMA_NUM_CTX` | `8192` | Model context size in tokens. Ollama's default of 4096 is too small for four photos plus directions. |
 
-The server running the app has to be able to reach it. If it can't, Scan shows an error and recipes can still be typed in by hand.
+The server running the app has to be able to reach it. If it can't, importing from photos shows an error, links fall back to simpler parsing, and recipes can still be typed in by hand.
 
 ## Accounts
 
@@ -144,8 +159,10 @@ Run the tests (they never call the real Ollama server):
 | `app/models.py` | SQLAlchemy models |
 | `app/services.py` | List merging, moving, store deletion, catalog helpers |
 | `app/quantities.py` | Parsing, unit conversion, merging and fraction display |
-| `app/scan.py` | Reading recipes from photos with Ollama |
-| `app/routes/` | Auth, households, lists (+ live events), stores, catalog, recipes (+ scan), plan (recipe → lists picker) |
+| `app/scan.py` | Asking the Ollama model to read recipes (photos, page text, ingredient lines) |
+| `app/importer.py` | Fetching recipe links (public addresses only) and reading their recipe data |
+| `app/directions.py` | Splitting directions into steps |
+| `app/routes/` | Auth, households, lists (+ live events), stores, catalog, recipes (+ import), plan (recipe → lists picker) |
 | `app/templates/`, `app/static/` | Server-rendered pages (Jinja2 + htmx), CSS and JS |
 
 Live updates use Server-Sent Events broadcast in-process, so run a **single** worker. The Docker image already does.

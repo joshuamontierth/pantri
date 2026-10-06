@@ -27,7 +27,7 @@
   <a class="back-link" href="/h/{{ hid }}/recipes{{ '/' ~ recipe.id if recipe }}">{{ icon("chevron-left", 18) }}{{ recipe.name if recipe else "Recipes" }}</a>
   <div class="page-head">
     <h1 class="page-title">{{ "Edit recipe" if recipe else "New recipe" }}</h1>
-    {% if not recipe and not notice %}{% set scan_label = "From photo" %}{% include "recipes/_scan_form.html" %}{% endif %}
+    {% if not recipe and not notice %}{% include "recipes/_import.html" %}{% endif %}
   </div>
   {% if notice %}<p class="alert info">{{ notice }}</p>{% endif %}
   {% for e in errors %}<p class="alert error">{{ e }}</p>{% endfor %}
@@ -51,6 +51,18 @@
       </div>
       <button type="button" class="btn small mt" data-add-row>{{ icon("plus", 18, 2.2) }}Add ingredient</button>
     </div>
+
+    <label class="field">
+      <span class="field-label">Directions</span>
+      <textarea name="directions" rows="5" maxlength="20000" data-autogrow
+                placeholder="Number the steps, or leave a blank line between them.">{{ directions }}</textarea>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Recipe link</span>
+      <input name="source_url" value="{{ source_url }}" maxlength="500" placeholder="https://" inputmode="url"
+             autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+    </label>
 
     <div class="sticky-actions">
       <button class="btn primary grow">Save recipe</button>

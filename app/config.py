@@ -13,6 +13,8 @@ COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true"
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama.example.com:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:26b-a4b-it-qat")
 OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
+# Ollama's default context (4096 tokens) is too small for four photos, a long catalog and the directions.
+OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 
 SESSION_COOKIE = "session"
 SESSION_DAYS = 365

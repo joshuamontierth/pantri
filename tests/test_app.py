@@ -547,14 +547,14 @@ def test_scan_recipe_prefills_editor(make_user, monkeypatch):
 
     seen = {}
 
-    def fake_model(photos, catalog_names):
-        seen["photos"], seen["catalog"] = photos, catalog_names
+    def fake_model(prompt, photos, schema):
+        seen["photos"], seen["prompt"] = photos, prompt
         return {"name": "Guacamole", "ingredients": [
             {"item": "avocados", "amount": "3", "unit": ""},
             {"item": "salt", "amount": "1", "unit": "tsp."},
             {"item": "garlic", "amount": "4-5", "unit": "cloves"},
             {"item": "cilantro", "amount": "", "unit": ""},
-        ]}
+        ], "directions": ["Mash the avocados.", "Stir in   the rest."]}
 
     monkeypatch.setattr(scan, "_ask_model", fake_model)
     r = alice.client.post(
@@ -563,9 +563,10 @@ def test_scan_recipe_prefills_editor(make_user, monkeypatch):
                ("photos", ("back.jpg", _jpeg_bytes(), "image/jpeg"))],
     )
     assert r.status_code == 200, r.text[:500]
-    assert len(seen["photos"]) == 2 and seen["catalog"] == ["Salt"]
+    assert len(seen["photos"]) == 2 and "Paprika): Salt." in seen["prompt"]
     page = r.text
     assert 'value="Guacamole"' in page and "Read from your photos" in page
+    assert "Mash the avocados.\n\nStir in the rest.</textarea>" in page
     assert 'value="Avocados"' in page and 'value="Salt"' in page  # catalog spelling wins
     assert 'value="5"' in page and 'value="clove"' in page and 'value="tsp"' in page
     # Nothing saved until the user presses Save.
@@ -587,7 +588,7 @@ def test_scan_recipe_errors(make_user, monkeypatch):
     alice = make_user("alice")
     hid = alice.create_household()
 
-    def down(photos, catalog_names):
+    def down(prompt, photos, schema):
         raise scan.ScanError("Couldn't reach the recipe reader.")
 
     monkeypatch.setattr(scan, "_ask_model", down)
@@ -607,8 +608,11 @@ def test_scan_recipe_errors(make_user, monkeypatch):
     r = alice.client.post(f"/h/{hid}/recipes/scan", files=[("photos", ("a.jpg", _jpeg_bytes(), "image/jpeg"))])
     assert r.status_code == 403
 
+    # Without a model there's no photo scanning, but links can still be imported.
     monkeypatch.setattr("app.config.OLLAMA_URL", "")
-    assert "data-scan-form" not in alice.get(f"/h/{hid}/recipes").text
+    page = alice.get(f"/h/{hid}/recipes").text
+    assert "data-take-photo" not in page and "scan-library" not in page
+    assert "data-link-form" in page and 'name="url"' in page
 
 
 def test_scanned_pinches_are_blank_and_recipe_saves(make_user, monkeypatch):
@@ -619,7 +623,7 @@ def test_scanned_pinches_are_blank_and_recipe_saves(make_user, monkeypatch):
 
     alice = make_user("alice")
     hid = alice.create_household()
-    monkeypatch.setattr(scan, "_ask_model", lambda photos, names: {"name": "Guacamole", "ingredients": [
+    monkeypatch.setattr(scan, "_ask_model", lambda prompt, photos, schema: {"name": "Guacamole", "ingredients": [
         {"item": "avocados", "amount": "3", "unit": ""},
         {"item": "cayenne pepper", "amount": "1", "unit": "pinch"},
         {"item": "salt", "amount": "a pinch", "unit": ""},
@@ -648,7 +652,169 @@ def test_scan_offers_camera_and_library(make_user):
     alice = make_user("alice")
     hid = alice.create_household()
     page = alice.get(f"/h/{hid}/recipes").text
-    assert 'capture="environment"' in page and "Take a photo" in page and "Choose photos" in page
+    assert 'capture="environment"' in page and "Take a photo" in page and "Choose photos" in page and "Paste a link" in page
     assert 'id="scan-library"' in page and 'for="scan-library"' in page
     # In-app camera (used over HTTPS), with the camera app as a fallback.
     assert "data-camera" in page and "data-camera-shutter" in page and "data-camera-native" in page
+
+
+def test_directions_steps():
+    from app.directions import steps
+
+    assert steps("") == []
+    # One paragraph that wraps stays one step.
+    assert steps("In a bowl, use a mixer on low\nspeed to combine the milk") == [
+        {"n": 1, "text": "In a bowl, use a mixer on low\nspeed to combine the milk"}]
+    # Numbered steps, blank-line paragraphs, headings, and "1.5 cups" isn't a step marker.
+    assert steps("1. Preheat oven.\n2) Mix 1.5 cups flour\nwith sugar\n\nFor the glaze:\n\nWhisk.\n\nStep 3: Drizzle.") == [
+        {"n": 1, "text": "Preheat oven."},
+        {"n": 2, "text": "Mix 1.5 cups flour\nwith sugar"},
+        {"heading": "For the glaze"},
+        {"n": 3, "text": "Whisk."},
+        {"n": 4, "text": "Drizzle."},
+    ]
+    # Typed one per line, each a full sentence.
+    assert [s["text"] for s in steps("Boil water.\nAdd pasta.\nDrain!")] == ["Boil water.", "Add pasta.", "Drain!"]
+
+
+def test_recipe_directions_and_link_saved(make_user):
+    alice = make_user("alice")
+    hid = alice.create_household()
+    form = {"name": "Toast", "ing_name": ["Bread"], "ing_amount": ["2"], "ing_unit": [""], "ing_ranks": [""],
+            "ing_ranks_dirty": ["0"], "directions": "1. Toast the bread.\r\n2. Butter it.", "source_url": "javascript:alert(1)"}
+    r = alice.post(f"/h/{hid}/recipes", form)
+    assert r.status_code == 400 and "recipe link should be a web address" in r.text
+    assert "1. Toast the bread.\n2. Butter it.</textarea>" in r.text  # kept while fixing the error
+
+    form["source_url"] = "www.example.com/toast#comments"
+    r = alice.post(f"/h/{hid}/recipes", form)
+    assert r.status_code == 303
+    with session() as s:
+        recipe = s.query(models.Recipe).one()
+        assert recipe.directions == "1. Toast the bread.\n2. Butter it."
+        assert recipe.source_url == "https://www.example.com/toast"
+        rid = recipe.id
+    page = alice.get(f"/h/{hid}/recipes/{rid}").text
+    assert 'class="step-n" aria-hidden="true">2</span><span class="step-text">Butter it.</span>' in page
+    assert 'href="https://www.example.com/toast"' in page and ">example.com<" in page
+    assert "Toast the bread." in alice.get(f"/h/{hid}/recipes/{rid}/edit").text
+
+    # Clearing them works, and copies carry them along.
+    other = alice.create_household("Cabin")
+    alice.post(f"/h/{hid}/recipes/{rid}/copy", {"target_household_id": str(other)})
+    form.update(directions="", source_url="")
+    assert alice.post(f"/h/{hid}/recipes/{rid}", form).status_code == 303
+    with session() as s:
+        recipe = s.get(models.Recipe, rid)
+        assert recipe.directions is None and recipe.source_url is None
+        copy = s.query(models.Recipe).filter_by(household_id=other).one()
+        assert copy.directions.startswith("1. Toast") and copy.source_url == "https://www.example.com/toast"
+    assert "Directions" not in alice.get(f"/h/{hid}/recipes/{rid}").text.split("</h1>")[1].split("form-actions")[0]
+
+
+def test_old_database_gets_new_columns(tmp_path):
+    import sqlite3
+
+    from sqlalchemy import inspect
+
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE recipes (id INTEGER PRIMARY KEY, household_id INTEGER, name VARCHAR(150), created_at DATETIME)")
+    con.execute("INSERT INTO recipes (household_id, name) VALUES (1, 'Old')")
+    con.commit()
+    con.close()
+    engine = db.init_engine(path)
+    cols = {c["name"] for c in inspect(engine).get_columns("recipes")}
+    assert {"directions", "source_url"} <= cols
+    with engine.connect() as conn:
+        assert conn.exec_driver_sql("SELECT name, directions FROM recipes").all() == [("Old", None)]
+
+
+_RECIPE_PAGE = """<html><head><title>Best Chili | Example</title>
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [
+  {"@type": "WebPage", "name": "Best Chili"},
+  {"@type": ["Recipe"], "name": "Best Chili &amp; Cornbread",
+   "recipeIngredient": ["1 lb ground beef", "2 (15 ounce) cans kidney beans, drained", "Salt to taste"],
+   "recipeInstructions": [
+     {"@type": "HowToSection", "name": "Chili", "itemListElement": [
+       {"@type": "HowToStep", "text": "Brown the <b>beef</b>."},
+       {"@type": "HowToStep", "text": "Add beans and simmer."}]},
+     {"@type": "HowToStep", "text": "Serve."}]}
+]}</script></head><body>Ads</body></html>"""
+
+
+def test_import_link_uses_recipe_data(make_user, monkeypatch):
+    from app import importer, scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    store = alice.add_store(hid, "Costco")
+    alice.post(f"/h/{hid}/catalog", {"name": "Ground beef", "ranks": str(store)})
+    fetched = []
+
+    def fake_fetch(url):
+        fetched.append(url)
+        return url, _RECIPE_PAGE
+
+    seen = {}
+
+    def fake_model(prompt, images, schema):
+        seen["prompt"], seen["images"], seen["schema"] = prompt, images, schema
+        return {"ingredients": [{"item": "ground beef", "amount": "1", "unit": "lb"},
+                                {"item": "kidney beans", "amount": "2", "unit": "can"},
+                                {"item": "salt", "amount": "", "unit": ""}]}
+
+    monkeypatch.setattr(importer, "fetch_page", fake_fetch)
+    monkeypatch.setattr(scan, "_ask_model", fake_model)
+    r = alice.post(f"/h/{hid}/recipes/import", {"url": "Look at this! https://www.example.com/chili/#reviews"})
+    assert r.status_code == 200, r.text[:400]
+    assert fetched == ["https://www.example.com/chili/"]
+    assert "\n2 cans kidney beans, drained\n" in seen["prompt"] and seen["images"] is None  # bare sizes dropped
+    assert "directions" not in seen["schema"]["properties"]  # steps come straight from the page
+    page = r.text
+    assert "Read from example.com" in page and 'value="Best Chili &amp; Cornbread"' in page
+    assert 'value="Ground beef"' in page and 'value="Kidney beans"' in page
+    assert "Chili:\n\nBrown the beef.\n\nAdd beans and simmer.\n\nServe.</textarea>" in page
+    assert 'value="https://www.example.com/chili/"' in page
+    with session() as s:
+        assert s.query(models.Recipe).count() == 0
+
+    # If the model is down, the lines are split up here instead.
+    def down(prompt, images, schema):
+        raise scan.ScanError("down")
+
+    monkeypatch.setattr(scan, "_ask_model", down)
+    page = alice.post(f"/h/{hid}/recipes/import", {"url": "https://www.example.com/chili/"}).text
+    assert 'value="Kidney beans"' in page and 'value="Salt"' in page and 'value="can"' in page
+
+
+def test_import_link_errors(make_user, monkeypatch):
+    from app import importer, scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    r = alice.post(f"/h/{hid}/recipes/import", {"url": "not a link"})
+    assert r.status_code == 400 and "Paste a link to a recipe page" in r.text
+    # The server never fetches local or tailnet addresses.
+    for url in ("http://127.0.0.1:8000/", "http://localhost/x", "http://10.0.0.5/", "http://100.101.102.103/", "http://[::1]/"):
+        r = alice.post(f"/h/{hid}/recipes/import", {"url": url})
+        assert r.status_code == 400 and "private address" in r.text, url
+    for url in ("file:///etc/passwd", "ftp://example.com/x"):
+        assert "Paste a link to a recipe page" in alice.post(f"/h/{hid}/recipes/import", {"url": url}).text
+
+    # A page with no recipe data falls back to reading its text with the model.
+    monkeypatch.setattr(importer, "fetch_page", lambda url: (url, "<title>Nana's Pie</title><nav>Menu</nav><p>Ingredients</p><ul><li>2 apples</li></ul><p>Bake it.</p>"))
+    seen = {}
+
+    def fake_model(prompt, images, schema):
+        seen["prompt"] = prompt
+        return {"name": "Nana's Pie", "ingredients": [{"item": "apples", "amount": "2", "unit": ""}], "directions": ["Bake it."]}
+
+    monkeypatch.setattr(scan, "_ask_model", fake_model)
+    page = alice.post(f"/h/{hid}/recipes/import", {"url": "https://pie.example/"}).text
+    assert "Page title: Nana's Pie" in seen["prompt"] and "2 apples" in seen["prompt"] and "Menu" not in seen["prompt"]
+    assert "Bake it.</textarea>" in page and 'value="Apples"' in page
+
+    monkeypatch.setattr("app.config.OLLAMA_URL", "")
+    r = alice.post(f"/h/{hid}/recipes/import", {"url": "https://pie.example/"})
+    assert r.status_code == 400 and "couldn&#39;t find a recipe" in r.text

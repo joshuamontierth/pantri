@@ -7,6 +7,7 @@
   <a class="back-link" href="/h/{{ hid }}/recipes">{{ icon("chevron-left", 18) }}Recipes</a>
   {% if copied %}<p class="alert success">Copied into {{ household.name }}. Ingredients that were new here have no stores yet. <a href="/h/{{ hid }}/catalog">Set their stores</a></p>{% endif %}
   <h1 class="page-title">{{ recipe.name }}</h1>
+  {% if source_site %}<a class="source-link" href="{{ recipe.source_url }}" target="_blank" rel="noopener noreferrer">{{ source_site }}{{ icon("external", 15, 2) }}</a>{% endif %}
 
   <a class="btn primary block" href="/h/{{ hid }}/plan/pick?r={{ recipe.id }}">Add to lists</a>
 
@@ -26,6 +27,27 @@
     </li>
     {% endfor %}
   </ul>
+
+  {% if steps %}
+  <div class="dir-head">
+    <h2 class="section-label">Directions</h2>
+    <button type="button" class="chip wake-chip" data-wake-lock aria-pressed="false" hidden>{{ icon("sun", 17, 2) }}<span>Keep screen on</span></button>
+  </div>
+  {% if steps|length == 1 and steps[0].n %}
+  <p class="dir-text">{{ steps[0].text }}</p>
+  {% else %}
+  <ol class="steps" data-steps="{{ recipe.id }}">
+    {% for s in steps %}
+    {% if s.heading %}
+    <li class="step-heading">{{ s.heading }}</li>
+    {% else %}
+    <li><button type="button" class="step" aria-pressed="false"><span class="step-n" aria-hidden="true">{{ s.n }}</span><span class="step-text">{{ s.text }}</span></button></li>
+    {% endif %}
+    {% endfor %}
+  </ol>
+  <p class="field-hint dir-hint">Tap a step to mark it done.</p>
+  {% endif %}
+  {% endif %}
 
   <div class="form-actions mt-lg">
     <a class="btn" href="/h/{{ hid }}/recipes/{{ recipe.id }}/edit">Edit</a>

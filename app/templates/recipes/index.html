@@ -7,7 +7,7 @@
   <div class="page-head">
     <h1 class="page-title">Recipes</h1>
     <div class="head-actions">
-      {% include "recipes/_scan_form.html" %}
+      {% include "recipes/_import.html" %}
       <a class="btn small" href="/h/{{ hid }}/recipes/new">{{ icon("plus", 18, 2.2) }}New</a>
     </div>
   </div>
@@ -32,7 +32,7 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p class="lede">No recipes yet. Write one down, or scan a photo of a recipe card, then pick the stores you buy each ingredient at.</p>
+  <p class="lede">No recipes yet. Write one down, or import one from a photo or a recipe website, then pick the stores you buy each ingredient at.</p>
   <a class="btn primary" href="/h/{{ hid }}/recipes/new">New recipe</a>
   {% endif %}
 </div>

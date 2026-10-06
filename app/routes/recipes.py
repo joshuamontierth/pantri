@@ -3,8 +3,9 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 import re
+from urllib.parse import urlsplit
 
-from .. import quantities, scan, services
+from .. import directions, importer, quantities, scan, services
 from ..db import get_db
 from ..deps import form_data, household_member
 from ..models import Household, Membership, Recipe, RecipeIngredient
@@ -47,7 +48,8 @@ def _rows_from_recipe(recipe):
     ]
 
 
-def _editor(request, db, membership, recipe=None, name="", rows=None, errors=None, notice=None, status_code=200):
+def _editor(request, db, membership, recipe=None, name="", rows=None, directions_text="", source_url="",
+            errors=None, notice=None, status_code=200):
     hid = membership.household_id
     catalog = services.catalog_items(db, hid)
     return render(
@@ -57,6 +59,8 @@ def _editor(request, db, membership, recipe=None, name="", rows=None, errors=Non
             "recipe": recipe,
             "name": name,
             "rows": rows if rows is not None else [],
+            "directions": directions_text,
+            "source_url": source_url,
             "errors": errors or [],
             "notice": notice,
             "stores": services.household_stores(db, hid),
@@ -83,6 +87,21 @@ def _read_editor_form(form):
         for i in range(n)
     ]
     return form.get("name", "").strip(), rows
+
+
+def _read_extras(form):
+    """(directions, source_url, errors) from the editor form."""
+    errors = []
+    text = directions.normalize(form.get("directions", ""))
+    if len(text) > directions.MAX_LENGTH:
+        errors.append(f"Directions can be up to {directions.MAX_LENGTH:,} characters.")
+    link = form.get("source_url", "").strip()
+    if link:
+        try:
+            link = importer.normalize_link(link)
+        except ValueError:
+            errors.append("The recipe link should be a web address, like https://www.allrecipes.com/recipe/…")
+    return text, link, errors
 
 
 def _validate(db, household_id, name, raw_rows):
@@ -149,6 +168,8 @@ def _clean_scanned_amount(amount_text, unit_text):
     amount_text, unit_text = amount_text.strip(), unit_text.strip()
     if _VAGUE_RE.search(amount_text) or _VAGUE_RE.search(unit_text):
         return "", ""
+    # A package size that ended up in the unit: "4" + "4 ounce" is 4, "1" + "16 ounce package" is 1 package.
+    unit_text = re.sub(r"^\(?\s*[\d./]+\s*-?\s*[a-z]+\.?\s*\)?\s*", "", unit_text, flags=re.I) if amount_text else unit_text
     rng = re.match(r"^(.+?)\s*(?:-|–|to)\s*(.+)$", amount_text)
     if rng:
         amount_text = rng.group(2)  # ranges: buy enough for the larger amount
@@ -182,11 +203,34 @@ def scan_recipe(request: Request, household_id: int, form=Depends(form_data), me
     except scan.ScanError as e:
         return _recipes_page(request, db, membership, str(e), 400)
 
+    n = len(photos)
+    return _prefilled_editor(request, db, membership, catalog, data,
+                             f"Read from your photo{'s' if n != 1 else ''}. Check the ingredients and stores, then save.")
+
+
+@router.post("/h/{household_id}/recipes/import")
+def import_recipe(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
+    """Read a recipe from a link and open it in the editor for review. Nothing is saved yet."""
+    catalog = services.catalog_items(db, household_id)
+    try:
+        data = importer.import_link(form.get("url", ""), [c.name for c in catalog])
+    except scan.ScanError as e:
+        return _recipes_page(request, db, membership, str(e), 400)
+    site = re.sub(r"^www\.", "", urlsplit(data["source_url"]).hostname or "the link")
+    return _prefilled_editor(request, db, membership, catalog, data,
+                             f"Read from {site}. Check the ingredients and stores, then save.")
+
+
+def _prefilled_editor(request, db, membership, catalog, data, notice):
     by_name = {c.name_lower: c for c in catalog}
-    rows = []
+    rows, seen = [], set()
     for ing in data["ingredients"]:
         known = by_name.get(ing["item"].lower())
         amount, unit = _clean_scanned_amount(ing["amount"], ing["unit"])
+        key = ing["item"].lower()
+        if key in seen and not amount:
+            continue  # "1 tsp salt, plus more for sprinkling" read as two salts
+        seen.add(key)
         rows.append({
             "name": known.name if known else ing["item"][:1].upper() + ing["item"][1:],
             "amount": amount,
@@ -194,11 +238,8 @@ def scan_recipe(request: Request, household_id: int, form=Depends(form_data), me
             "ranks": known.ranked_store_ids if known else [],
             "dirty": False,
         })
-    n = len(photos)
-    return _editor(
-        request, db, membership, name=data["name"], rows=rows,
-        notice=f"Read from your photo{'s' if n != 1 else ''}. Check the ingredients and stores, then save.",
-    )
+    return _editor(request, db, membership, name=data["name"], rows=rows, directions_text=data.get("directions", ""),
+                   source_url=data.get("source_url", ""), notice=notice)
 
 
 @router.get("/h/{household_id}/recipes/new")
@@ -209,10 +250,12 @@ def new_recipe(request: Request, membership=Depends(household_member), db: Sessi
 @router.post("/h/{household_id}/recipes")
 def create_recipe(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
     name, raw_rows = _read_editor_form(form)
+    directions_text, source_url, extra_errors = _read_extras(form)
     errors, rows, parsed = _validate(db, household_id, name, raw_rows)
-    if errors:
-        return _editor(request, db, membership, name=name, rows=rows, errors=errors, status_code=400)
-    recipe = Recipe(household_id=household_id, name=name)
+    if errors or extra_errors:
+        return _editor(request, db, membership, name=name, rows=rows, directions_text=directions_text,
+                       source_url=form.get("source_url", "").strip(), errors=errors + extra_errors, status_code=400)
+    recipe = Recipe(household_id=household_id, name=name, directions=directions_text or None, source_url=source_url or None)
     db.add(recipe)
     db.flush()
     _save_ingredients(db, household_id, recipe, parsed)
@@ -234,7 +277,9 @@ def view_recipe(request: Request, household_id: int, recipe_id: int, copied: int
     return render(
         request,
         "recipes/view.html",
-        {"recipe": recipe, "store_names": stores, "other_households": other_households, "copied": copied},
+        {"recipe": recipe, "store_names": stores, "other_households": other_households, "copied": copied,
+         "steps": directions.steps(recipe.directions or ""),
+         "source_site": re.sub(r"^www\.", "", urlsplit(recipe.source_url).hostname or "") if recipe.source_url else ""},
         db=db,
         membership=membership,
     )
@@ -245,6 +290,7 @@ def edit_recipe(request: Request, household_id: int, recipe_id: int, membership=
     recipe = _get_recipe(db, household_id, recipe_id)
     return _editor(
         request, db, membership, recipe=recipe, name=recipe.name, rows=_rows_from_recipe(recipe),
+        directions_text=recipe.directions or "", source_url=recipe.source_url or "",
     )
 
 
@@ -252,10 +298,14 @@ def edit_recipe(request: Request, household_id: int, recipe_id: int, membership=
 def update_recipe(request: Request, household_id: int, recipe_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
     recipe = _get_recipe(db, household_id, recipe_id)
     name, raw_rows = _read_editor_form(form)
+    directions_text, source_url, extra_errors = _read_extras(form)
     errors, rows, parsed = _validate(db, household_id, name, raw_rows)
-    if errors:
-        return _editor(request, db, membership, recipe=recipe, name=name, rows=rows, errors=errors, status_code=400)
+    if errors or extra_errors:
+        return _editor(request, db, membership, recipe=recipe, name=name, rows=rows, directions_text=directions_text,
+                       source_url=form.get("source_url", "").strip(), errors=errors + extra_errors, status_code=400)
     recipe.name = name
+    recipe.directions = directions_text or None
+    recipe.source_url = source_url or None
     _save_ingredients(db, household_id, recipe, parsed)
     db.commit()
     return RedirectResponse(f"/h/{household_id}/recipes/{recipe.id}", status_code=303)
@@ -277,7 +327,7 @@ def copy_recipe(
     target_member = db.query(Membership).filter_by(household_id=target_household_id, user_id=membership.user_id).one_or_none()
     if target_member is None or target_household_id == household_id:
         raise HTTPException(404, "Household not found")
-    copy = Recipe(household_id=target_household_id, name=recipe.name)
+    copy = Recipe(household_id=target_household_id, name=recipe.name, directions=recipe.directions, source_url=recipe.source_url)
     db.add(copy)
     db.flush()
     for ing in recipe.ingredients:

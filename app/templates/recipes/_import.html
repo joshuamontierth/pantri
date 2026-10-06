@@ -1,27 +1,44 @@
-{# "Scan" button. Phones get a choice of camera or photo library; computers go straight to the file picker. #}
-{% if scan_enabled() %}
+{# "Import" button: a sheet offering the camera and photo library (when a model is set up) and a recipe link. #}
+{% set photos_ok = scan_enabled() %}
 <form method="post" action="/h/{{ household.id }}/recipes/scan" enctype="multipart/form-data" class="scan-form" data-scan-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="button" class="btn small{{ ' ' ~ scan_class if scan_class }}" data-scan-button>{{ icon("camera", 18) }}{{ scan_label or "Scan" }}</button>
-  <input type="file" id="scan-library" name="photos" accept="image/*" multiple hidden data-scan-input data-scan-library>
-  <dialog class="sheet scan-sheet" aria-labelledby="scan-sheet-title">
+  <button type="button" class="btn small" data-import-button>{{ icon("import", 18) }}Import</button>
+  {% if photos_ok %}<input type="file" id="scan-library" name="photos" accept="image/*" multiple hidden data-scan-input data-scan-library>{% endif %}
+  <dialog class="sheet scan-sheet" aria-labelledby="import-sheet-title">
     <div class="sheet-grabber" aria-hidden="true"></div>
-    <h2 class="sheet-title" id="scan-sheet-title">Scan a recipe</h2>
-    <p class="field-hint">Up to {{ MAX_PHOTOS }} photos, like the front and back of a card.</p>
-    <div class="choices">
+    <h2 class="sheet-title" id="import-sheet-title">Import a recipe</h2>
+    {% if photos_ok %}
+    <div class="choices" data-import-choices>
       <label class="choice" data-take-photo>
         <span class="choice-icon">{{ icon("camera", 22) }}</span>
-        <span class="choice-text"><strong>Take a photo</strong><span>Open the camera</span></span>
+        <span class="choice-text"><strong>Take a photo</strong><span>A recipe card or cookbook page</span></span>
         <input type="file" name="photos" accept="image/*" capture="environment" hidden data-scan-input>
       </label>
       <label class="choice" for="scan-library">
         <span class="choice-icon">{{ icon("image", 22) }}</span>
-        <span class="choice-text"><strong>Choose photos</strong><span>From your photo library</span></span>
+        <span class="choice-text"><strong>Choose photos</strong><span>Up to {{ MAX_PHOTOS }}, screenshots work too</span></span>
       </label>
+      <button type="button" class="choice" data-link-choice>
+        <span class="choice-icon">{{ icon("link", 22) }}</span>
+        <span class="choice-text"><strong>Paste a link</strong><span>From a recipe website</span></span>
+      </button>
+    </div>
+    {% endif %}
+    <div class="link-step" data-link-step {{ 'hidden' if photos_ok }}>
+      <label class="field">
+        <span class="field-label">Recipe link</span>
+        <span class="link-field">
+          <input type="text" name="url" form="link-import" required placeholder="https://" inputmode="url" enterkeyhint="go"
+                 autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-link-input>
+          <button type="button" class="btn" data-link-paste hidden>Paste</button>
+        </span>
+      </label>
+      <button class="btn primary block" form="link-import">Import</button>
     </div>
     <button type="button" class="btn block" data-scan-cancel>Cancel</button>
   </dialog>
 
+  {% if photos_ok %}
   <dialog class="camera" data-camera aria-label="Camera">
     <video playsinline muted autoplay></video>
     <div class="camera-flash" aria-hidden="true"></div>
@@ -40,6 +57,10 @@
       <button type="button" class="btn camera-done" data-camera-done disabled>Read recipe</button>
     </div>
   </dialog>
+  {% endif %}
+</form>
+<form method="post" action="/h/{{ household.id }}/recipes/import" id="link-import" data-link-form hidden>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 </form>
 <div class="scan-overlay" role="status" aria-live="polite" hidden>
   <div class="scan-card">
@@ -48,4 +69,3 @@
     <p class="state-text">This usually takes a few seconds.</p>
   </div>
 </div>
-{% endif %}

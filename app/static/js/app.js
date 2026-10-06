@@ -90,7 +90,7 @@
     });
   });
 
-  // ---------- scan a recipe photo ----------
+  // ---------- import a recipe (photos or a link) ----------
   const MAX_SHOTS = 4;
   // A live camera view needs HTTPS (or localhost). Over plain http, "Take a photo" opens the phone's camera app.
   const liveCamera = !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -107,9 +107,22 @@
     // Only send the input that holds the photos.
     form.querySelectorAll("[data-scan-input]").forEach((other) => { if (other !== input) other.disabled = true; });
     form.querySelectorAll("dialog[open]").forEach((d) => d.close());
-    const overlay = form.nextElementSibling;
-    if (overlay && overlay.classList.contains("scan-overlay")) overlay.hidden = false;
+    showReading();
     form.submit();
+  }
+
+  function showReading() {
+    const overlay = document.querySelector(".scan-overlay");
+    if (overlay) overlay.hidden = false;
+  }
+
+  function showLinkStep(sheet) {
+    const choices = sheet.querySelector("[data-import-choices]");
+    if (choices) choices.hidden = true;
+    sheet.querySelector("[data-link-step]").hidden = false;
+    const paste = sheet.querySelector("[data-link-paste]");
+    paste.hidden = !(window.isSecureContext && navigator.clipboard && navigator.clipboard.readText);
+    sheet.querySelector("[data-link-input]").focus();
   }
 
   function cameraFor(form) {
@@ -251,11 +264,24 @@
   }
 
   document.addEventListener("click", (e) => {
-    const button = e.target.closest("[data-scan-button]");
+    const button = e.target.closest("[data-import-button]");
     if (button) {
-      const form = button.form;
-      if (offerCamera) form.querySelector(".scan-sheet").showModal();
-      else form.querySelector("[data-scan-library]").click();
+      const sheet = button.form.querySelector(".scan-sheet");
+      const takePhoto = sheet.querySelector("[data-take-photo]");
+      if (takePhoto) takePhoto.hidden = !offerCamera;
+      sheet.showModal();
+      if (!sheet.querySelector("[data-import-choices]")) showLinkStep(sheet);
+      return;
+    }
+    const linkChoice = e.target.closest("[data-link-choice]");
+    if (linkChoice) {
+      showLinkStep(linkChoice.closest("dialog"));
+      return;
+    }
+    const paste = e.target.closest("[data-link-paste]");
+    if (paste) {
+      const input = paste.closest("dialog").querySelector("[data-link-input]");
+      navigator.clipboard.readText().then((text) => { if (text.trim()) input.value = text.trim(); input.focus(); }).catch(() => input.focus());
       return;
     }
     // "Take a photo": the in-app camera when we can, otherwise the label opens the phone's camera app.
@@ -280,6 +306,22 @@
       const r = sheet.getBoundingClientRect();
       if (e.clientY < r.top || e.clientY > r.bottom || e.clientX < r.left || e.clientX > r.right) sheet.close();
     }
+  });
+
+  // Back to the first choices whenever the sheet closes.
+  document.querySelectorAll(".scan-sheet").forEach((sheet) => {
+    sheet.addEventListener("close", () => {
+      const choices = sheet.querySelector("[data-import-choices]");
+      if (choices) {
+        choices.hidden = false;
+        sheet.querySelector("[data-link-step]").hidden = true;
+      }
+    });
+  });
+  document.addEventListener("submit", (e) => {
+    if (!e.target.matches("[data-link-form]") || e.defaultPrevented) return;
+    document.querySelectorAll(".scan-sheet[open]").forEach((d) => d.close());
+    showReading();
   });
 
   // Upload as soon as photos are picked (library, or the phone's camera app).
@@ -749,6 +791,13 @@
         updateRow(row, false);
       }
     });
+    // The directions box grows with its text.
+    form.querySelectorAll("textarea[data-autogrow]").forEach((ta) => {
+      ta.style.overflowY = "hidden";
+      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + 2 + "px"; };
+      ta.addEventListener("input", fit);
+      fit();
+    });
     // Enter inside an ingredient's text boxes moves to the next row instead of submitting.
     form.addEventListener("keydown", (e) => {
       if (e.key !== "Enter" || !e.target.matches("input") || !e.target.closest("[data-ing-row]")) return;
@@ -757,6 +806,55 @@
       const idx = rows.indexOf(e.target.closest("[data-ing-row]"));
       if (idx === rows.length - 1) addRow(true);
       else rows[idx + 1].querySelector(".ing-name").focus();
+    });
+  }
+
+  // ---------- cooking from a recipe ----------
+  function initSteps(list) {
+    // Tap a step to mark it done. Remembered for this tab, so a reload mid-recipe keeps your place.
+    const key = "steps-" + list.dataset.steps;
+    const buttons = Array.from(list.querySelectorAll(".step"));
+    let done = [];
+    try { done = JSON.parse(sessionStorage.getItem(key) || "[]"); } catch (_) { done = []; }
+    buttons.forEach((b, i) => b.setAttribute("aria-pressed", done.includes(i) ? "true" : "false"));
+    list.addEventListener("click", (e) => {
+      const b = e.target.closest(".step");
+      if (!b) return;
+      b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      buzz(8);
+      const now = buttons.flatMap((x, i) => (x.getAttribute("aria-pressed") === "true" ? [i] : []));
+      try { sessionStorage.setItem(key, JSON.stringify(now)); } catch (_) { /* private mode */ }
+    });
+  }
+
+  function initWakeLock(button) {
+    // Keep the screen from dimming while cooking. Browsers drop the lock when the tab is hidden; take it back on return.
+    if (!("wakeLock" in navigator)) return;
+    button.hidden = false;
+    const label = button.querySelector("span");
+    let lock = null;
+    let wanted = false;
+    function render() {
+      button.setAttribute("aria-pressed", wanted ? "true" : "false");
+      label.textContent = wanted ? "Screen stays on" : "Keep screen on";
+    }
+    async function acquire() {
+      try {
+        lock = await navigator.wakeLock.request("screen");
+        lock.addEventListener("release", () => { lock = null; });
+      } catch (_) {
+        wanted = false;
+      }
+      render();
+    }
+    button.addEventListener("click", () => {
+      wanted = !wanted;
+      if (wanted) acquire();
+      else if (lock) lock.release();
+      render();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (wanted && !lock && document.visibilityState === "visible") acquire();
     });
   }
 
@@ -847,6 +945,10 @@
     if (document.body.hasAttribute("data-lists-page")) initListsPage();
     const editor = document.querySelector("[data-recipe-editor]");
     if (editor) initRecipeEditor(editor);
+    const steps = document.querySelector("[data-steps]");
+    if (steps) initSteps(steps);
+    const wake = document.querySelector("[data-wake-lock]");
+    if (wake) initWakeLock(wake);
     const choose = document.querySelector("[data-choose-button]");
     if (choose) initChoose(choose);
     const plan = document.querySelector("[data-plan-form]");
