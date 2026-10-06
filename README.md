@@ -10,6 +10,7 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Recipes:** ingredients have amounts and units, plus directions and an optional link to where the recipe came from. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups).
 - **Cooking:** the recipe page shows the directions as numbered steps. Tap a step to mark it done, and turn on **Keep screen on** so the phone doesn't dim while you cook.
 - **Import a recipe:** from photos of a recipe card or cookbook (ingredients and directions can be in different photos), or from a link to a recipe website. It opens filled in for you to check and save. See [Importing recipes](#importing-recipes).
+- **Add details to a recipe:** on a recipe you already have, **Add details** reads a photo or link and fills in only what's missing, like directions. See [Adding details](#adding-details-to-an-existing-recipe).
 
 ## Run it (Docker)
 
@@ -93,6 +94,17 @@ The photos can be different parts of one recipe, like the ingredients on one pag
 - Some sites (Budget Bytes and Sally's Baking Addiction, for example) block servers from reading their pages. Take screenshots of the recipe and use **Choose photos** instead.
 - The server only fetches public websites. Links to `localhost`, your home network or tailnet addresses are refused.
 - Without a model configured, links still work for sites with structured data, with simpler ingredient parsing.
+
+### Adding details to an existing recipe
+
+On a recipe's page, tap **Add details** (or **Add directions** when it has none) and use a photo or a link the same way. The editor opens with only the gaps filled in:
+
+- directions, if the recipe has none;
+- ingredients it doesn't have yet (matched by name, so "avocado" and "Avocados" are the same);
+- amounts for ingredients that have none;
+- the recipe link, if it has none.
+
+Nothing it already has is changed: the name, existing amounts and existing directions stay as they are. Filled-in parts are marked **Added** or **Amount added**, and nothing is saved until you press **Save**. A photo of just the directions works here. If there's nothing new, the recipe page says so.
 
 ### How the model reads recipes
 

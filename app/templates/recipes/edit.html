@@ -2,7 +2,7 @@
 {% set nav = "recipes" %}
 {% block title %}{{ "Edit " ~ recipe.name if recipe else "New recipe" }} · Recipes{% endblock %}
 {% macro ing_row(row) %}
-<div class="ing-row" data-ing-row>
+<div class="ing-row{{ ' fresh' if row.fresh }}" data-ing-row>
   <div class="ing-main">
     <input name="ing_name" class="ing-name" value="{{ row.name }}" placeholder="Ingredient" list="catalog-names" aria-label="Ingredient" maxlength="100" autocomplete="off">
     <input name="ing_amount" class="ing-amount" value="{{ row.amount }}" placeholder="Amt" aria-label="Amount">
@@ -11,6 +11,7 @@
   </div>
   <div class="ing-stores">
     <div class="ing-status">
+      {% if row.fresh %}<span class="fresh-tag">{{ row.fresh }}</span>{% endif %}
       <span class="ing-summary"></span>
       <button type="button" class="linklike" data-toggle-ranks>Change</button>
     </div>
@@ -53,13 +54,13 @@
     </div>
 
     <label class="field">
-      <span class="field-label">Directions</span>
+      <span class="field-label">Directions{% if fresh.directions %} <span class="fresh-tag">Added</span>{% endif %}</span>
       <textarea name="directions" rows="5" maxlength="20000" data-autogrow
                 placeholder="Number the steps, or leave a blank line between them.">{{ directions }}</textarea>
     </label>
 
     <label class="field">
-      <span class="field-label">Recipe link</span>
+      <span class="field-label">Recipe link{% if fresh.link %} <span class="fresh-tag">Added</span>{% endif %}</span>
       <input name="source_url" value="{{ source_url }}" maxlength="500" placeholder="https://" inputmode="url"
              autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
     </label>

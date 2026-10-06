@@ -100,6 +100,11 @@ def _singularize(word):
     return word
 
 
+def singularize(word):
+    """'avocados' -> 'avocado', for matching ingredient names."""
+    return _singularize(word)
+
+
 def _pluralize(word):
     if word.endswith(("s", "x", "z", "ch", "sh")):
         return word + "es"

@@ -586,6 +586,19 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 .step[aria-pressed="true"] .step-text { color: var(--ink-3); }
 .step-heading { padding: 20px 0 8px; font-size: 18px; font-weight: 750; letter-spacing: -0.01em; }
 .dir-hint { margin: 10px 0 0; }
+.dir-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px;
+  border: 1px dashed var(--rule-2); border-radius: 14px; color: var(--ink-2);
+}
+.dir-empty p { margin: 0; text-wrap: pretty; }
+
+/* just filled in by "Add details" */
+.fresh-tag {
+  display: inline-block; padding: 1px 7px; border-radius: 6px; vertical-align: 1px;
+  background: var(--accent-wash); color: var(--accent);
+  font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none;
+}
+.ing-row.fresh { box-shadow: inset 3px 0 0 var(--accent); padding-left: 12px; }
 
 /* in-app camera (HTTPS only) */
 .camera {

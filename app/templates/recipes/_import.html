@@ -1,12 +1,16 @@
-{# "Import" button: a sheet offering the camera and photo library (when a model is set up) and a recipe link. #}
+{# "Import" button: a sheet offering the camera and photo library (when a model is set up) and a recipe link.
+   Include once per page. On a recipe's page it adds details to that recipe instead:
+   {% with import_base=<recipe url>, import_label=..., import_title=..., import_hint=..., import_small=false %} #}
 {% set photos_ok = scan_enabled() %}
-<form method="post" action="/h/{{ household.id }}/recipes/scan" enctype="multipart/form-data" class="scan-form" data-scan-form>
+{% set base = import_base or "/h/" ~ household.id ~ "/recipes" %}
+<form method="post" action="{{ base }}/scan" enctype="multipart/form-data" class="scan-form" id="import-photos" data-scan-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="button" class="btn small" data-import-button>{{ icon("import", 18) }}Import</button>
+  <button type="button" class="btn{{ ' small' if import_small is not defined or import_small }}" data-import-button>{{ icon("import", 18) }}{{ import_label or "Import" }}</button>
   {% if photos_ok %}<input type="file" id="scan-library" name="photos" accept="image/*" multiple hidden data-scan-input data-scan-library>{% endif %}
   <dialog class="sheet scan-sheet" aria-labelledby="import-sheet-title">
     <div class="sheet-grabber" aria-hidden="true"></div>
-    <h2 class="sheet-title" id="import-sheet-title">Import a recipe</h2>
+    <h2 class="sheet-title" id="import-sheet-title">{{ import_title or "Import a recipe" }}</h2>
+    {% if import_hint %}<p class="field-hint">{{ import_hint }}</p>{% endif %}
     {% if photos_ok %}
     <div class="choices" data-import-choices>
       <label class="choice" data-take-photo>
@@ -59,7 +63,7 @@
   </dialog>
   {% endif %}
 </form>
-<form method="post" action="/h/{{ household.id }}/recipes/import" id="link-import" data-link-form hidden>
+<form method="post" action="{{ base }}/import" id="link-import" data-link-form hidden>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 </form>
 <div class="scan-overlay" role="status" aria-live="polite" hidden>

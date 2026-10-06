@@ -346,8 +346,11 @@ def guess_ingredient(line):
 
 # ---------- the whole import ----------
 
-def import_link(text, catalog_names):
-    """{"name", "ingredients": [{"item", "amount", "unit"}], "directions", "source_url"} for a recipe link."""
+def import_link(text, catalog_names, recipe_name=None):
+    """{"name", "ingredients": [{"item", "amount", "unit"}], "directions", "source_url"} for a recipe link.
+
+    recipe_name is set when adding to an existing recipe (see scan.read_recipe).
+    """
     try:
         url = normalize_link(text)
     except ValueError:
@@ -379,4 +382,4 @@ def import_link(text, catalog_names):
     title, body = page_text(page)
     if not body:
         raise ScanError("I couldn't find a recipe on that page.")
-    return {**scan.read_page_text(title, body, catalog_names), "source_url": source_url}
+    return {**scan.read_page_text(title, body, catalog_names, recipe_name), "source_url": source_url}

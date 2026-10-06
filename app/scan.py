@@ -106,6 +106,14 @@ def _with_catalog(prompt, catalog_names):
     return prompt
 
 
+def _with_name(prompt, recipe_name):
+    """When adding to an existing recipe: which recipe to read, and that a part of it is enough."""
+    if recipe_name:
+        prompt += (f'- This is the recipe "{recipe_name}". If there are several recipes, read that one. '
+                   "It's fine if only part of it is shown, like just the directions.\n")
+    return prompt
+
+
 def _ask_model(prompt, images, schema):
     message = {"role": "user", "content": prompt}
     if images:
@@ -154,33 +162,38 @@ def _ingredients(data):
     return out
 
 
-def _recipe(data, missing_message):
+def _recipe(data, missing_message, partial=False):
+    """The model's answer, cleaned up. A partial read (adding to a recipe) may have directions but no ingredients."""
     ingredients = _ingredients(data)
-    if not ingredients:
-        raise ScanError(missing_message)
     steps = data.get("directions") or []
     if isinstance(steps, str):
         steps = [steps]
-    return {
-        "name": str(data.get("name") or "").strip()[:150],
-        "ingredients": ingredients,
-        "directions": directions.join_steps(str(s) for s in steps if s),
-    }
+    text = directions.join_steps(str(s) for s in steps if s)
+    if not ingredients and not (partial and text):
+        raise ScanError(missing_message)
+    return {"name": str(data.get("name") or "").strip()[:150], "ingredients": ingredients, "directions": text}
 
 
-def read_recipe(photo_bytes, catalog_names):
-    """{"name", "ingredients": [{"item", "amount", "unit"}], "directions"} read from the photos."""
+def read_recipe(photo_bytes, catalog_names, recipe_name=None):
+    """{"name", "ingredients": [{"item", "amount", "unit"}], "directions"} read from the photos.
+
+    With recipe_name (adding to an existing recipe), photos of just the directions are fine.
+    """
     photos = [prepare_photo(b) for b in photo_bytes[:MAX_PHOTOS]]
     if not photos:
         raise ScanError("Take or choose a photo of the recipe first.")
-    data = _ask_model(_with_catalog(_PHOTO_PROMPT, catalog_names), photos, _RECIPE_SCHEMA)
-    return _recipe(data, "I couldn't find any ingredients in that photo. Try a closer, sharper shot of the ingredient list.")
+    prompt = _with_name(_with_catalog(_PHOTO_PROMPT, catalog_names), recipe_name)
+    missing = ("I couldn't find ingredients or directions in that photo. Try a closer, sharper shot." if recipe_name else
+               "I couldn't find any ingredients in that photo. Try a closer, sharper shot of the ingredient list.")
+    return _recipe(_ask_model(prompt, photos, _RECIPE_SCHEMA), missing, partial=bool(recipe_name))
 
 
-def read_page_text(title, text, catalog_names):
+def read_page_text(title, text, catalog_names, recipe_name=None):
     """Like read_recipe, from the visible text of a web page."""
-    prompt = _with_catalog(_PAGE_PROMPT, catalog_names) + f"\nPage title: {title}\n\nPage text:\n{text[:_MAX_PAGE_TEXT]}"
-    return _recipe(_ask_model(prompt, None, _RECIPE_SCHEMA), "I couldn't find a recipe on that page.")
+    prompt = (_with_name(_with_catalog(_PAGE_PROMPT, catalog_names), recipe_name)
+              + f"\nPage title: {title}\n\nPage text:\n{text[:_MAX_PAGE_TEXT]}")
+    return _recipe(_ask_model(prompt, None, _RECIPE_SCHEMA), "I couldn't find a recipe on that page.",
+                   partial=bool(recipe_name))
 
 
 def read_ingredient_lines(lines, catalog_names):

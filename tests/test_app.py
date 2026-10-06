@@ -709,7 +709,8 @@ def test_recipe_directions_and_link_saved(make_user):
         assert recipe.directions is None and recipe.source_url is None
         copy = s.query(models.Recipe).filter_by(household_id=other).one()
         assert copy.directions.startswith("1. Toast") and copy.source_url == "https://www.example.com/toast"
-    assert "Directions" not in alice.get(f"/h/{hid}/recipes/{rid}").text.split("</h1>")[1].split("form-actions")[0]
+    page = alice.get(f"/h/{hid}/recipes/{rid}").text
+    assert "No directions yet" in page and 'class="step"' not in page
 
 
 def test_old_database_gets_new_columns(tmp_path):
@@ -818,3 +819,98 @@ def test_import_link_errors(make_user, monkeypatch):
     monkeypatch.setattr("app.config.OLLAMA_URL", "")
     r = alice.post(f"/h/{hid}/recipes/import", {"url": "https://pie.example/"})
     assert r.status_code == 400 and "couldn&#39;t find a recipe" in r.text
+
+
+def _editor_values(page, field):
+    import re
+    from html import unescape
+    page = page.split('id="ing-row-template"')[0]
+    return [unescape(v) for v in re.findall(rf'name="{field}"[^>]*?value="([^"]*)"', page)]
+
+
+def test_add_details_from_photo_fills_only_gaps(make_user, monkeypatch):
+    from app import scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    form = {"name": "Guacamole", "ing_name": ["Avocados", "Lime", "Salt"], "ing_amount": ["3", "", "1"],
+            "ing_unit": ["", "", "tsp"], "ing_ranks": ["", "", ""], "ing_ranks_dirty": ["0", "0", "0"]}
+    assert alice.post(f"/h/{hid}/recipes", form).status_code == 303
+    with session() as s:
+        rid = s.query(models.Recipe).one().id
+    page = alice.get(f"/h/{hid}/recipes/{rid}").text
+    assert f'action="/h/{hid}/recipes/{rid}/scan"' in page and f'action="/h/{hid}/recipes/{rid}/import"' in page
+    assert "Add details" in page and "No directions yet" in page
+
+    seen = {}
+
+    def fake_model(prompt, photos, schema):
+        seen["prompt"] = prompt
+        return {"name": "Best Guac Ever", "ingredients": [
+            {"item": "avocado", "amount": "4", "unit": ""},   # already there with an amount: kept as 3
+            {"item": "lime", "amount": "1", "unit": ""},      # there without an amount: filled in
+            {"item": "red onion", "amount": "1/2", "unit": ""},
+            {"item": "cilantro", "amount": "", "unit": ""},
+        ], "directions": ["Mash the avocados.", "Stir in the rest."]}
+
+    monkeypatch.setattr(scan, "_ask_model", fake_model)
+    r = alice.client.post(f"/h/{hid}/recipes/{rid}/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", ("card.jpg", _jpeg_bytes(), "image/jpeg"))])
+    assert r.status_code == 200, r.text[:400]
+    assert 'This is the recipe "Guacamole"' in seen["prompt"]
+    assert "existing items" in seen["prompt"] and "Paprika): Avocados, Lime, Salt" in seen["prompt"]
+    page = r.text
+    assert "Added directions, 2 ingredients and 1 amount from your photo." in page
+    assert _editor_values(page, "name") == ["Guacamole"]  # the name isn't touched
+    assert _editor_values(page, "ing_name") == ["Avocados", "Lime", "Salt", "Red onion", "Cilantro"]
+    assert _editor_values(page, "ing_amount") == ["3", "1", "1", "1/2", ""]
+    assert page.count('class="fresh-tag">Added</span>') == 3  # two rows and the directions
+    assert 'class="fresh-tag">Amount added</span>' in page
+    assert "Mash the avocados.\n\nStir in the rest.</textarea>" in page
+    with session() as s:  # nothing saved yet
+        assert s.get(models.Recipe, rid).directions is None and len(s.get(models.Recipe, rid).ingredients) == 3
+
+    # Saving the editor keeps it all.
+    values = {f: _editor_values(page, f) for f in ("ing_name", "ing_amount", "ing_unit", "ing_ranks", "ing_ranks_dirty")}
+    assert alice.post(f"/h/{hid}/recipes/{rid}", {"name": "Guacamole", **values,
+                                                   "directions": "Mash the avocados.\n\nStir in the rest."}).status_code == 303
+
+    # A photo of just the directions is fine here, but existing directions are never replaced.
+    monkeypatch.setattr(scan, "_ask_model", lambda prompt, photos, schema: {
+        "name": "", "ingredients": [], "directions": ["Something else entirely."]})
+    r = alice.client.post(f"/h/{hid}/recipes/{rid}/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", ("back.jpg", _jpeg_bytes(), "image/jpeg"))])
+    assert r.status_code == 200 and "Nothing to add from your photo" in r.text and "Mash the avocados." in r.text
+
+    # Errors show on the recipe's page.
+    monkeypatch.setattr(scan, "_ask_model", lambda prompt, photos, schema: {"name": "", "ingredients": [], "directions": []})
+    r = alice.client.post(f"/h/{hid}/recipes/{rid}/scan", data={"csrf_token": alice.csrf},
+                          files=[("photos", ("blurry.jpg", _jpeg_bytes(), "image/jpeg"))])
+    assert r.status_code == 400 and "find ingredients or directions" in r.text and "<h1 class=\"page-title\">Guacamole</h1>" in r.text
+
+
+def test_add_details_from_link(make_user, monkeypatch):
+    from app import importer, scan
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    form = {"name": "Chili", "ing_name": ["Ground beef"], "ing_amount": ["1"], "ing_unit": ["lb"],
+            "ing_ranks": [""], "ing_ranks_dirty": ["0"], "directions": "Cook it all."}
+    alice.post(f"/h/{hid}/recipes", form)
+    with session() as s:
+        rid = s.query(models.Recipe).one().id
+    r = alice.post(f"/h/{hid}/recipes/{rid}/import", {"url": "http://localhost/"})
+    assert r.status_code == 400 and "private address" in r.text and "Chili</h1>" in r.text
+
+    monkeypatch.setattr(importer, "fetch_page", lambda url: (url, _RECIPE_PAGE))
+    monkeypatch.setattr(scan, "_ask_model", lambda prompt, images, schema: {"ingredients": [
+        {"item": "ground beef", "amount": "2", "unit": "lb"}, {"item": "kidney beans", "amount": "2", "unit": "can"}]})
+    page = alice.post(f"/h/{hid}/recipes/{rid}/import", {"url": "https://www.example.com/chili"}).text
+    assert "Added 1 ingredient and the link from example.com." in page
+    assert _editor_values(page, "ing_amount")[:1] == ["1"]  # kept
+    assert 'value="https://www.example.com/chili"' in page and "Cook it all.</textarea>" in page
+
+    # Another household's recipe can't be touched.
+    bob = make_user("bob")
+    bob.create_household()
+    assert bob.post(f"/h/{hid}/recipes/{rid}/import", {"url": "https://www.example.com/chili"}).status_code in (403, 404)

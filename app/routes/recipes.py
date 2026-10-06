@@ -49,7 +49,7 @@ def _rows_from_recipe(recipe):
 
 
 def _editor(request, db, membership, recipe=None, name="", rows=None, directions_text="", source_url="",
-            errors=None, notice=None, status_code=200):
+            errors=None, notice=None, fresh=None, status_code=200):
     hid = membership.household_id
     catalog = services.catalog_items(db, hid)
     return render(
@@ -63,6 +63,7 @@ def _editor(request, db, membership, recipe=None, name="", rows=None, directions
             "source_url": source_url,
             "errors": errors or [],
             "notice": notice,
+            "fresh": fresh or {},  # {"directions": bool, "link": bool}: just filled in from an import
             "stores": services.household_stores(db, hid),
             "catalog_json": {c.name_lower: {"name": c.name, "ranks": c.ranked_store_ids} for c in catalog},
         },
@@ -194,18 +195,29 @@ def scan_recipe(request: Request, household_id: int, form=Depends(form_data), me
     """Read a recipe from photos and open it in the editor for review. Nothing is saved yet."""
     if not scan.enabled():
         raise HTTPException(404, "Reading recipes from photos isn't set up on this server.")
-    photos = [f for f in form.getlist("photos") if hasattr(f, "file") and f.filename]
-    if len(photos) > scan.MAX_PHOTOS:
-        return _recipes_page(request, db, membership, f"Use up to {scan.MAX_PHOTOS} photos at a time.", 400)
     catalog = services.catalog_items(db, household_id)
     try:
-        data = scan.read_recipe([f.file.read(scan.MAX_PHOTO_BYTES + 1) for f in photos], [c.name for c in catalog])
+        photos = _photo_bytes(form)
+        data = scan.read_recipe(photos, [c.name for c in catalog])
     except scan.ScanError as e:
         return _recipes_page(request, db, membership, str(e), 400)
-
-    n = len(photos)
     return _prefilled_editor(request, db, membership, catalog, data,
-                             f"Read from your photo{'s' if n != 1 else ''}. Check the ingredients and stores, then save.")
+                             f"Read from {_your_photos(photos)}. Check the ingredients and stores, then save.")
+
+
+def _photo_bytes(form):
+    photos = [f for f in form.getlist("photos") if hasattr(f, "file") and f.filename]
+    if len(photos) > scan.MAX_PHOTOS:
+        raise scan.ScanError(f"Use up to {scan.MAX_PHOTOS} photos at a time.")
+    return [f.file.read(scan.MAX_PHOTO_BYTES + 1) for f in photos]
+
+
+def _your_photos(photos):
+    return "your photo" + ("s" if len(photos) != 1 else "")
+
+
+def _site(url):
+    return re.sub(r"^www\.", "", urlsplit(url).hostname or "") if url else ""
 
 
 @router.post("/h/{household_id}/recipes/import")
@@ -216,15 +228,19 @@ def import_recipe(request: Request, household_id: int, form=Depends(form_data), 
         data = importer.import_link(form.get("url", ""), [c.name for c in catalog])
     except scan.ScanError as e:
         return _recipes_page(request, db, membership, str(e), 400)
-    site = re.sub(r"^www\.", "", urlsplit(data["source_url"]).hostname or "the link")
     return _prefilled_editor(request, db, membership, catalog, data,
-                             f"Read from {site}. Check the ingredients and stores, then save.")
+                             f"Read from {_site(data['source_url']) or 'the link'}. Check the ingredients and stores, then save.")
 
 
 def _prefilled_editor(request, db, membership, catalog, data, notice):
+    return _editor(request, db, membership, name=data["name"], rows=_rows_from_import(catalog, data["ingredients"]),
+                   directions_text=data.get("directions", ""), source_url=data.get("source_url", ""), notice=notice)
+
+
+def _rows_from_import(catalog, ingredients):
     by_name = {c.name_lower: c for c in catalog}
     rows, seen = [], set()
-    for ing in data["ingredients"]:
+    for ing in ingredients:
         known = by_name.get(ing["item"].lower())
         amount, unit = _clean_scanned_amount(ing["amount"], ing["unit"])
         key = ing["item"].lower()
@@ -238,8 +254,94 @@ def _prefilled_editor(request, db, membership, catalog, data, notice):
             "ranks": known.ranked_store_ids if known else [],
             "dirty": False,
         })
-    return _editor(request, db, membership, name=data["name"], rows=rows, directions_text=data.get("directions", ""),
-                   source_url=data.get("source_url", ""), notice=notice)
+    return rows
+
+
+# ---------- adding details to an existing recipe ----------
+
+def _name_key(name):
+    """'Avocados' and 'avocado' are the same ingredient."""
+    words = name.lower().split()
+    return " ".join(words[:-1] + [quantities.singularize(words[-1])]) if words else ""
+
+
+def _names_for_model(recipe, catalog):
+    """The recipe's own ingredients first, so the model reuses their names."""
+    mine = [ing.catalog_item.name for ing in recipe.ingredients]
+    have = {n.lower() for n in mine}
+    return mine + [c.name for c in catalog if c.name_lower not in have]
+
+
+def _and(parts):
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _augmented_editor(request, db, membership, recipe, catalog, data, source):
+    """The recipe in the editor with only its gaps filled in: nothing it already has is changed."""
+    rows = _rows_from_recipe(recipe)
+    by_key = {_name_key(r["name"]): r for r in rows}
+    added = filled = 0
+    for row in _rows_from_import(catalog, data["ingredients"]):
+        have = by_key.get(_name_key(row["name"]))
+        if have is None:
+            row["fresh"] = "Added"
+            rows.append(row)
+            by_key[_name_key(row["name"])] = row
+            added += 1
+        elif not have["amount"] and row["amount"] and not have.get("fresh"):
+            have.update(amount=row["amount"], unit=row["unit"], fresh="Amount added")
+            filled += 1
+    directions_text = recipe.directions or ""
+    new_directions = not directions_text and bool(data.get("directions"))
+    if new_directions:
+        directions_text = data["directions"]
+    source_url = recipe.source_url or ""
+    new_link = not source_url and bool(data.get("source_url"))
+    if new_link:
+        source_url = data["source_url"]
+
+    found = []
+    if new_directions:
+        found.append("directions")
+    if added:
+        found.append(f"{added} ingredient{'s' if added != 1 else ''}")
+    if filled:
+        found.append(f"{filled} amount{'s' if filled != 1 else ''}")
+    if new_link:
+        found.append("the link")
+    if not found:
+        return _view(request, db, membership, recipe,
+                     notice=f"Nothing to add from {source}. This recipe already has everything it found.")
+    return _editor(request, db, membership, recipe=recipe, name=recipe.name, rows=rows, directions_text=directions_text,
+                   source_url=source_url, fresh={"directions": new_directions, "link": new_link},
+                   notice=f"Added {_and(found)} from {source}. Check them, then save.")
+
+
+@router.post("/h/{household_id}/recipes/{recipe_id}/scan")
+def scan_into_recipe(request: Request, household_id: int, recipe_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
+    """Fill in what a recipe is missing (directions, ingredients, amounts) from photos. Nothing is saved yet."""
+    if not scan.enabled():
+        raise HTTPException(404, "Reading recipes from photos isn't set up on this server.")
+    recipe = _get_recipe(db, household_id, recipe_id)
+    catalog = services.catalog_items(db, household_id)
+    try:
+        photos = _photo_bytes(form)
+        data = scan.read_recipe(photos, _names_for_model(recipe, catalog), recipe_name=recipe.name)
+    except scan.ScanError as e:
+        return _view(request, db, membership, recipe, error=str(e), status_code=400)
+    return _augmented_editor(request, db, membership, recipe, catalog, data, _your_photos(photos))
+
+
+@router.post("/h/{household_id}/recipes/{recipe_id}/import")
+def import_into_recipe(request: Request, household_id: int, recipe_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
+    """Fill in what a recipe is missing from a link. Nothing is saved yet."""
+    recipe = _get_recipe(db, household_id, recipe_id)
+    catalog = services.catalog_items(db, household_id)
+    try:
+        data = importer.import_link(form.get("url", ""), _names_for_model(recipe, catalog), recipe_name=recipe.name)
+    except scan.ScanError as e:
+        return _view(request, db, membership, recipe, error=str(e), status_code=400)
+    return _augmented_editor(request, db, membership, recipe, catalog, data, _site(data["source_url"]) or "the link")
 
 
 @router.get("/h/{household_id}/recipes/new")
@@ -265,12 +367,16 @@ def create_recipe(request: Request, household_id: int, form=Depends(form_data), 
 
 @router.get("/h/{household_id}/recipes/{recipe_id}")
 def view_recipe(request: Request, household_id: int, recipe_id: int, copied: int = 0, membership=Depends(household_member), db: Session = Depends(get_db)):
-    recipe = _get_recipe(db, household_id, recipe_id)
-    stores = {s.id: s.name for s in services.household_stores(db, household_id)}
+    return _view(request, db, membership, _get_recipe(db, household_id, recipe_id), copied=copied)
+
+
+def _view(request, db, membership, recipe, copied=0, notice=None, error=None, status_code=200):
+    hid = membership.household_id
+    stores = {s.id: s.name for s in services.household_stores(db, hid)}
     other_households = (
         db.query(Household)
         .join(Membership, Membership.household_id == Household.id)
-        .filter(Membership.user_id == membership.user_id, Household.id != household_id)
+        .filter(Membership.user_id == membership.user_id, Household.id != hid)
         .order_by(Household.name)
         .all()
     )
@@ -278,10 +384,11 @@ def view_recipe(request: Request, household_id: int, recipe_id: int, copied: int
         request,
         "recipes/view.html",
         {"recipe": recipe, "store_names": stores, "other_households": other_households, "copied": copied,
-         "steps": directions.steps(recipe.directions or ""),
-         "source_site": re.sub(r"^www\.", "", urlsplit(recipe.source_url).hostname or "") if recipe.source_url else ""},
+         "notice": notice, "error": error,
+         "steps": directions.steps(recipe.directions or ""), "source_site": _site(recipe.source_url)},
         db=db,
         membership=membership,
+        status_code=status_code,
     )
 
 

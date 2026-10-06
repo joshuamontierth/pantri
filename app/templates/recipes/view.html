@@ -6,6 +6,8 @@
 <div class="narrow">
   <a class="back-link" href="/h/{{ hid }}/recipes">{{ icon("chevron-left", 18) }}Recipes</a>
   {% if copied %}<p class="alert success">Copied into {{ household.name }}. Ingredients that were new here have no stores yet. <a href="/h/{{ hid }}/catalog">Set their stores</a></p>{% endif %}
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert info">{{ notice }}</p>{% endif %}
   <h1 class="page-title">{{ recipe.name }}</h1>
   {% if source_site %}<a class="source-link" href="{{ recipe.source_url }}" target="_blank" rel="noopener noreferrer">{{ source_site }}{{ icon("external", 15, 2) }}</a>{% endif %}
 
@@ -47,10 +49,19 @@
   </ol>
   <p class="field-hint dir-hint">Tap a step to mark it done.</p>
   {% endif %}
+  {% else %}
+  <h2 class="section-label">Directions</h2>
+  <div class="dir-empty">
+    <p>No directions yet. Add them from a photo of the recipe or a link to it.</p>
+    <button type="button" class="btn small" form="import-photos" data-import-button>{{ icon("import", 18) }}Add directions</button>
+  </div>
   {% endif %}
 
   <div class="form-actions mt-lg">
     <a class="btn" href="/h/{{ hid }}/recipes/{{ recipe.id }}/edit">Edit</a>
+    {% with import_base="/h/" ~ hid ~ "/recipes/" ~ recipe.id, import_label="Add details", import_title="Add details",
+            import_hint="Fills in directions, missing ingredients and missing amounts. Nothing this recipe already has is changed.",
+            import_small=false %}{% include "recipes/_import.html" %}{% endwith %}
     {% if other_households %}
     <details class="copy-menu">
       <summary class="btn">Copy to…</summary>
