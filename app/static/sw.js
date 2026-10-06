@@ -30,7 +30,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== STATIC && k !== PAGES).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== STATIC && k !== PAGES && k !== "share-inbox").map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -39,7 +39,9 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (req.method === "GET" && url.pathname.startsWith("/static/")) {
+  if (req.method === "POST" && url.pathname === "/share") {
+    event.respondWith(receiveShare(req));
+  } else if (req.method === "GET" && url.pathname.startsWith("/static/")) {
     event.respondWith(fromCache(req));
   } else if (req.mode === "navigate") {
     event.respondWith(req.method === "GET" ? page(req) : postOrOffline(req));
@@ -96,6 +98,18 @@ async function postOrOffline(req) {
 async function offlinePage() {
   const saved = await caches.match("/offline");
   return saved || new Response("<h1>You're offline</h1>", { headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+
+// Something shared to the installed site (a recipe link, or photos of one). Photos wait in a cache for
+// the recipes page, which imports them like any other (app.js); the link goes along in the address.
+async function receiveShare(req) {
+  const form = await req.formData();
+  const photos = form.getAll("photos").filter((f) => f && f.size).slice(0, 4);
+  const inbox = await caches.open("share-inbox");
+  await Promise.all((await inbox.keys()).map((k) => inbox.delete(k)));
+  await Promise.all(photos.map((f, i) => inbox.put("/share-inbox/" + i, new Response(f, { headers: { "Content-Type": f.type || "image/jpeg" } }))));
+  const text = [form.get("url"), form.get("text"), form.get("title")].filter(Boolean).join(" ");
+  return Response.redirect("/share?" + new URLSearchParams({ text, photos: String(photos.length) }), 303);
 }
 
 // The lists page asks for the other pages to be saved, so recipes open offline even if not visited yet.

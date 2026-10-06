@@ -177,7 +177,7 @@ fun Dot(color: Color, size: Int = 8) {
 @Composable
 fun StatusPill(status: SyncStatus, onClick: () -> Unit) {
     val (label, color) = when {
-        status.connection == Connection.Offline -> (if (status.pending > 0) "Offline · ${status.pending} waiting" else "Offline") to colors.ink3
+        status.connection == Connection.Offline -> (if (status.pending > 0) "Offline · ${status.pending}" else "Offline") to colors.ink3
         status.pending > 0 -> "Syncing" to colors.accent
         status.connection == Connection.Live -> "Live" to colors.successInk
         status.connection == Connection.Online -> "Online" to colors.successInk
@@ -201,12 +201,12 @@ fun TopNav(current: Screen, status: SyncStatus, onTab: (Screen) -> Unit, onSetti
         Modifier.fillMaxWidth().background(colors.paper).statusBarsPadding().padding(start = 6.dp, end = 4.dp).height(56.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        for ((screen, label) in listOf(Screen.Lists to "Lists", Screen.Recipes to "Recipes")) {
+        for ((screen, label) in listOf(Screen.Lists to "Lists", Screen.Recipes to "Recipes", Screen.Catalog to "Catalog")) {
             val on = current == screen
             Text(
                 label,
-                Modifier.clip(RoundedCornerShape(8.dp)).clickable { onTab(screen) }.padding(horizontal = 10.dp, vertical = 12.dp),
-                fontSize = 17.sp,
+                Modifier.clip(RoundedCornerShape(8.dp)).clickable { onTab(screen) }.padding(horizontal = 9.dp, vertical = 12.dp),
+                fontSize = 16.sp,
                 fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
                 color = if (on) colors.ink else colors.ink2,
             )

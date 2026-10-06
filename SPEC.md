@@ -63,7 +63,8 @@
 ## Android app
 - Native client for the same server and accounts; the website stays fully usable.
 - Lists and recipes work offline from a copy kept on the phone. Changes queue on the phone and sync when the server is reachable (also in the background after the app is closed); each change is applied once by the server.
-- Live updates while the app is open. Stores, catalog, members and recipe editing/import stay on the website.
+- Live updates while the app is open.
+- Same features and behavior as the website (accounts, households, members, stores, catalog, recipes with import and add details, adding recipes to lists), backed by the same server code. Sharing a link or photos to the app (or to the installed website) imports a recipe.
 
 ## Offline website
 - The lists page works offline from a copy kept in the browser, with the same change queue and sync as the Android app; it syncs when the server is reachable and shows live updates when online.

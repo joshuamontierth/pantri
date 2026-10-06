@@ -32,6 +32,13 @@ object AppIcons {
     val Sun = icon(circle(12f, 12f, 4f), "M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4")
     val CloudOff = icon("M3 3l18 18", "M8.5 8.6A5 5 0 0 0 6.5 18H17m3.2-1.6A4 4 0 0 0 17 10h-1A6 6 0 0 0 10.4 6.2")
     val Refresh = icon("M20 12a8 8 0 1 1-2.34-5.66L20 8.5", "M20 4v4.5h-4.5")
+    val Import = icon("M12 4v11M7.5 10.5 12 15l4.5-4.5", "M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3")
+    val Camera = icon(
+        "M3 8.5A2.5 2.5 0 0 1 5.5 6H7l1.6-2h6.8L17 6h1.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z",
+        circle(12f, 12.5f, 3.6f),
+    )
+    val Image = icon("M5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11A2.5 2.5 0 0 1 5.5 4z", circle(9f, 10f, 1.8f), "M21 16l-5-5-9 9")
+    val Link = icon("M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2", "M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2")
     val Book = icon("M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z", "M5 17a3 3 0 0 1 3-3h11")
 
     private fun circle(cx: Float, cy: Float, r: Float) =

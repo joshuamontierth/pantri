@@ -141,14 +141,14 @@ Open the site once with a connection on each device, using the **HTTPS address**
 - **Adding recipes to lists** works offline too: choose recipes, set multipliers, check what you need and pick stores, all from the copy on the device. The items join the same queue and appear on your lists straight away.
 - **Recipes, catalog and settings** open as they were last seen (recipes are saved in the background whenever the lists page is open). Changing them and importing need a connection; a page that isn't saved yet shows a "You're offline" page.
 - Changes are sent the next time the site is open with a connection. Each one is applied once, so nothing doubles up; a change to an item someone else deleted meanwhile is skipped.
-- **Add to Home Screen** (Safari's Share menu, or Chrome's menu) to open it like an app, offline too.
+- **Add to Home Screen** (Safari's Share menu, or Chrome's menu) to open it like an app, offline too. On Android, the installed site then appears in the share menu: share a recipe link or photos to it and they're imported, like in the app.
 - **Log out** clears the lists and pages saved on that device.
 
 Both pages share [app/static/js/household.js](app/static/js/household.js): the copy of the household, the change queue, and syncing through the same API as the Android app. [lists.js](app/static/js/lists.js) and [plan.js](app/static/js/plan.js) draw the pages, and [sw.js](app/static/sw.js) is the service worker that keeps pages and files cached.
 
 ## Android app
 
-A native app (Kotlin + Jetpack Compose) in [`android/`](android/). It talks to the same server and account as the website, and the website keeps working as before.
+A native app (Kotlin + Jetpack Compose) in [`android/`](android/). It does everything the website does, with the same rules and messages: both call the same server code ([app/actions.py](app/actions.py) and the recipe routes), so a check that fails on one fails the same way on the other.
 
 ### Install
 
@@ -159,9 +159,15 @@ Open it and log in with the server address (`https://shopping.example.com`), you
 
 ### What it does
 
-- **Lists:** swipe between stores, check off, add with catalog suggestions (with the one-tap "+ usual store"), edit, move, delete, clear checked (with undo), drag to reorder.
-- **Recipes:** search, read ingredients and directions (tap a step when it's done, keep the screen on), and add one or several recipes to the lists with a multiplier and a store per ingredient.
-- Stores, the catalog, members, and importing or editing recipes stay on the website (Settings → Open the website).
+The same pages as the website:
+
+- **Lists:** swipe between stores, check off, add with catalog suggestions (the one-tap "+ usual store", and "Save to catalog" for new things), edit, move, delete, clear checked (with undo), drag to reorder.
+- **Recipes:** search; new, edit, delete, copy to another household; import from a photo (camera or gallery, up to 4) or a link; **Add details** to fill in what a recipe is missing; read ingredients and directions (tap a step when it's done, keep the screen on); add recipes to the lists with multipliers and a store per ingredient.
+- **Catalog:** filter by store (remembered), search, add, rename, change store rankings, delete.
+- **Settings:** stores (add, rename, reorder, delete), switch or create households, invites, members (roles, password reset, remove), rename, leave or delete; account (change password, log out); sign up.
+- **Share to the app:** share a recipe page from Chrome, or recipe photos from Photos, and pick Shopping List; it opens in the editor to check and save.
+
+What works offline is the same as on the website: lists and adding recipes to lists fully, everything else read-only; saving recipes, imports and settings changes need a connection.
 
 ### Offline and live updates
 
@@ -202,6 +208,13 @@ The app uses `/api/v1` ([app/routes/api.py](app/routes/api.py)), with a bearer t
 | `GET /h/{id}/state` | The whole household: stores, list items, catalog, recipes (with an ETag) |
 | `POST /h/{id}/ops` | A batch of changes (`add`, `check`, `update`, `delete`, `reorder`, `restore`), each with an `op_id`; returns per-change results and fresh state |
 | `GET /h/{id}/events` | Live updates (Server-Sent Events) |
+| `POST /signup`, `POST /account/password` | Account (the password change also completes an admin reset) |
+| `POST /households`, `POST /invites/{id}/accept`, `…/decline` | Households and invites |
+| `GET /h/{id}/settings`, `POST /h/{id}/rename`, `…/invites`, `…/members/{id}/role`, `…/reset-password`, `DELETE …/members/{id}`, `POST /h/{id}/leave`, `…/delete` | The settings page |
+| `POST /h/{id}/stores`, `PUT/DELETE /h/{id}/stores/{id}`, `POST /h/{id}/stores/reorder` | Stores |
+| `POST /h/{id}/catalog`, `PUT/DELETE /h/{id}/catalog/{id}` | Catalog |
+| `POST /h/{id}/recipes`, `PUT/DELETE /h/{id}/recipes/{id}`, `GET …/{id}/draft`, `POST …/{id}/copy` | Recipes |
+| `POST /h/{id}/recipes/scan` (photos), `POST /h/{id}/recipes/import` (link) | Read a recipe into a draft to review; with `recipe_id`, only fill that recipe's gaps |
 
 ## Accounts
 
@@ -241,6 +254,7 @@ Run the tests (they never call the real Ollama server):
 | --- | --- |
 | `app/main.py` | App setup, error handling |
 | `app/models.py` | SQLAlchemy models |
+| `app/actions.py` | Everything people can do (accounts, households, stores, catalog...), shared by the website and the API |
 | `app/services.py` | List merging, moving, store deletion, catalog helpers |
 | `app/quantities.py` | Parsing, unit conversion, merging and fraction display |
 | `app/routes/api.py` | JSON API for the Android app (sync, live events) |

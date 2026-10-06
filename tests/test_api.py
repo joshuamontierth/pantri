@@ -381,3 +381,17 @@ def _jpeg():
     buf = io.BytesIO()
     Image.new("RGB", (50, 50), (200, 200, 200)).save(buf, "JPEG")
     return buf.getvalue()
+
+
+def test_share_target_lands_on_recipes(make_user):
+    import json
+
+    alice = make_user("alice")
+    assert alice.get("/share?text=x").headers["location"] == "/households"
+    hid = alice.create_household()
+    r = alice.get("/share?text=Look+https://example.com/pie&photos=2")
+    assert r.status_code == 303 and r.headers["location"] == f"/h/{hid}/recipes?shared=1&text=Look+https%3A%2F%2Fexample.com%2Fpie&photos=2"
+    assert alice.client.post("/share").status_code == 303  # without the service worker, still lands somewhere sensible
+    assert TestClient(app, follow_redirects=False).get("/share").status_code == 303  # (to the login page)
+    manifest = json.loads(TestClient(app).get("/static/manifest.json").text)
+    assert manifest["share_target"]["action"] == "/share" and manifest["share_target"]["params"]["files"][0]["name"] == "photos"

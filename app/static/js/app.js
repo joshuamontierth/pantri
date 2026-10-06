@@ -358,6 +358,38 @@
     }
     submitScan(input.form, input);
   });
+  // Shared to the installed site (sw.js -> /share -> here): import the link or photos.
+  (function importShared() {
+    const params = new URLSearchParams(location.search);
+    const form = document.querySelector("[data-scan-form]");
+    if (!params.get("shared") || !form) return;
+    history.replaceState(null, "", location.pathname);
+    const count = Number(params.get("photos") || 0);
+    const library = document.getElementById("scan-library");
+    if (count && library && window.caches) {
+      caches.open("share-inbox").then(async (inbox) => {
+        const dt = new DataTransfer();
+        for (let i = 0; i < count; i++) {
+          const r = await inbox.match("/share-inbox/" + i);
+          if (r) { const b = await r.blob(); dt.items.add(new File([b], "shared-" + (i + 1) + ".jpg", { type: b.type || "image/jpeg" })); }
+        }
+        await caches.delete("share-inbox");
+        if (dt.files.length) { library.files = dt.files; submitScan(form, library); }
+      });
+      return;
+    }
+    const link = (params.get("text") || "").match(/https?:\/\/\S+/);
+    const linkForm = document.querySelector("[data-link-form]");
+    const input = document.querySelector("[data-link-input]");
+    if (link && linkForm && input) {
+      input.value = link[0];
+      showReading();
+      linkForm.submit();
+    } else {
+      toast("Share a link to a recipe page, or photos of a recipe.", true);
+    }
+  })();
+
   // Coming back with the browser's back button shouldn't leave the reading screen up.
   window.addEventListener("pageshow", () => {
     document.querySelectorAll(".scan-overlay").forEach((o) => { o.hidden = true; });

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from .. import actions, config, services
 from ..db import get_db
+from ..deps import _session as logged_in
 from ..deps import current_user, household_admin, household_member
 from ..models import Household, Invite, Membership, User
 from ..templating import render
@@ -43,6 +44,23 @@ def home(request: Request, user=Depends(current_user), db: Session = Depends(get
         if len(memberships) == 1:
             return _redirect(f"/h/{memberships[0].household_id}")
     return _households_page(request, db, memberships, invites)
+
+
+@router.api_route("/share", methods=["GET", "POST"])
+def share(request: Request, text: str = "", photos: int = 0, sess=Depends(logged_in), db: Session = Depends(get_db)):
+    """Where things shared to the installed site land (see static/sw.js): on to your recipes page,
+    which imports the link or photos. (A POST only happens without the service worker; it carries no
+    photos.) It changes nothing, so it needs no CSRF token: the share sheet can't send one."""
+    from urllib.parse import urlencode
+
+    user = sess.user
+    memberships = _memberships(db, user)
+    ids = {m.household_id for m in memberships}
+    last = services.parse_int(request.cookies.get(LAST_HOUSEHOLD_COOKIE))
+    hid = last if last in ids else (memberships[0].household_id if len(memberships) == 1 else None)
+    if hid is None:
+        return _redirect("/households")
+    return _redirect(f"/h/{hid}/recipes?" + urlencode({"shared": 1, "text": text[:2000], "photos": max(0, min(photos, 4))}))
 
 
 @router.get("/households")

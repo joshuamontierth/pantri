@@ -1,10 +1,14 @@
 package app.shoppinglist
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,27 +31,68 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import app.shoppinglist.data.Connection
+import app.shoppinglist.ui.AccountScreen
 import app.shoppinglist.ui.AppViewModel
-import app.shoppinglist.ui.HouseholdPicker
+import app.shoppinglist.ui.CatalogEditScreen
+import app.shoppinglist.ui.CatalogScreen
+import app.shoppinglist.ui.ChangePasswordScreen
+import app.shoppinglist.ui.EditorScreen
+import app.shoppinglist.ui.HouseholdsScreen
 import app.shoppinglist.ui.ListsScreen
 import app.shoppinglist.ui.OutlineButton
+import app.shoppinglist.ui.PlanChooseScreen
 import app.shoppinglist.ui.PlanScreen
+import app.shoppinglist.ui.ReadingOverlay
 import app.shoppinglist.ui.RecipeScreen
 import app.shoppinglist.ui.RecipesScreen
 import app.shoppinglist.ui.Screen
 import app.shoppinglist.ui.SettingsScreen
 import app.shoppinglist.ui.SetupScreen
 import app.shoppinglist.ui.ShoppingTheme
+import app.shoppinglist.ui.StoresScreen
 import app.shoppinglist.ui.colors
 
 class MainActivity : ComponentActivity() {
+    private val vm: AppViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { ShoppingTheme { AppRoot(viewModel()) } }
+        setContent { ShoppingTheme { AppRoot(vm) } }
+        if (savedInstanceState == null) handleShare(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShare(intent)
+    }
+
+    /** A recipe link or photos shared from another app (Chrome, Photos...). */
+    private fun handleShare(intent: Intent?) {
+        intent ?: return
+        val photos = mutableListOf<Uri>()
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                streamExtra(intent)?.let(photos::add)
+                if (photos.isEmpty() && intent.getStringExtra(Intent.EXTRA_TEXT) == null) return
+            }
+            Intent.ACTION_SEND_MULTIPLE -> photos += streamsExtra(intent)
+            else -> return
+        }
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        vm.share(text, if (intent.type?.startsWith("image/") == true) photos else emptyList())
+    }
+
+    @Suppress("DEPRECATION")
+    private fun streamExtra(intent: Intent): Uri? =
+        if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        else intent.getParcelableExtra(Intent.EXTRA_STREAM)
+
+    @Suppress("DEPRECATION")
+    private fun streamsExtra(intent: Intent): List<Uri> =
+        (if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        else intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)).orEmpty()
 }
 
 @Composable
@@ -56,18 +101,26 @@ private fun AppRoot(vm: AppViewModel) {
     LaunchedEffect(vm) {
         vm.messages.collect { msg ->
             snackbar.currentSnackbarData?.dismiss()
+            val label = msg.actionLabel ?: if (msg.undo != null) "Undo" else null
             val result = snackbar.showSnackbar(
                 msg.text,
-                actionLabel = if (msg.undo != null) "Undo" else null,
-                duration = if (msg.undo != null) SnackbarDuration.Long else SnackbarDuration.Short,
+                actionLabel = label,
+                duration = if (label != null) SnackbarDuration.Long else SnackbarDuration.Short,
             )
-            if (result == SnackbarResult.ActionPerformed) msg.undo?.let(vm::undo)
+            if (result == SnackbarResult.ActionPerformed) {
+                msg.undo?.let(vm::undo)
+                msg.action?.invoke()
+            }
         }
     }
-    when {
-        !vm.loggedIn -> SetupScreen(vm)
-        vm.householdId < 0 -> HouseholdPicker(vm)
-        else -> MainScreens(vm, snackbar)
+    Box(Modifier.fillMaxSize()) {
+        when {
+            !vm.loggedIn -> SetupScreen(vm)
+            vm.mustChangePassword -> ChangePasswordScreen(vm, forced = true)
+            vm.householdId < 0 -> HouseholdsScreen(vm, canGoBack = false)
+            else -> MainScreens(vm, snackbar)
+        }
+        if (vm.reading) ReadingOverlay()
     }
 }
 
@@ -75,7 +128,9 @@ private fun AppRoot(vm: AppViewModel) {
 private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
     val view by vm.view.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
-    BackHandler(enabled = vm.stack.size > 1) { vm.back() }
+    BackHandler(enabled = vm.stack.size > 1) {
+        if (vm.screen == Screen.Editor) vm.closeEditor() else vm.back()
+    }
 
     if (vm.householdGone) {
         AlertDialog(
@@ -87,9 +142,17 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
         )
     }
 
-    val current = view
     val screen = vm.screen
-    if (current == null && screen != Screen.Settings) {
+    // Screens that don't need the household's copy.
+    when (screen) {
+        Screen.Settings -> return SettingsScreen(vm, status, snackbar)
+        Screen.Households -> return HouseholdsScreen(vm, canGoBack = true)
+        Screen.Account -> return AccountScreen(vm)
+        Screen.ChangePassword -> return ChangePasswordScreen(vm, forced = false)
+        else -> Unit
+    }
+    val current = view
+    if (current == null) {
         // First launch for this household: nothing saved on the phone yet.
         Column(Modifier.fillMaxSize().background(colors.paper).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -108,10 +171,15 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
     }
 
     when (screen) {
-        Screen.Lists -> ListsScreen(vm, current!!, status, snackbar)
-        Screen.Recipes -> RecipesScreen(vm, current!!, status, snackbar)
-        is Screen.Recipe -> RecipeScreen(vm, current!!, screen.id, snackbar)
-        is Screen.Plan -> PlanScreen(vm, current!!, screen.recipeIds, snackbar)
-        Screen.Settings -> SettingsScreen(vm, current, status, snackbar)
+        Screen.Lists -> ListsScreen(vm, current, status, snackbar)
+        Screen.Recipes -> RecipesScreen(vm, current, status, snackbar)
+        Screen.Catalog -> CatalogScreen(vm, current, status, snackbar)
+        is Screen.Recipe -> RecipeScreen(vm, current, screen.id, snackbar)
+        is Screen.PlanChoose -> PlanChooseScreen(vm, current, screen.preselected, snackbar)
+        is Screen.Plan -> PlanScreen(vm, current, screen.recipeIds, snackbar)
+        is Screen.CatalogEdit -> CatalogEditScreen(vm, current, screen.itemId, screen.name, snackbar)
+        Screen.Stores -> StoresScreen(vm, current, snackbar)
+        Screen.Editor -> vm.editor?.let { EditorScreen(vm, current, it, snackbar) } ?: run { vm.back() }
+        else -> Unit
     }
 }
