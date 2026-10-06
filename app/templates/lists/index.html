@@ -4,7 +4,10 @@
 {% block body_class %}lists-body{% endblock %}
 {% block body_attrs %}data-household="{{ household.id }}" data-lists-page{% endblock %}
 {% block main_class %}lists-main{% endblock %}
-{% block scripts %}<script src="/static/js/lists.js?v={{ static_v }}" defer></script>{% endblock %}
+{% block scripts %}
+<script src="/static/js/household.js?v={{ static_v }}" defer></script>
+<script src="/static/js/lists.js?v={{ static_v }}" defer></script>
+{% endblock %}
 {% block content %}
 <nav class="store-tabs" id="store-tabs" aria-label="Stores">
   <div class="tabs-track" role="tablist">

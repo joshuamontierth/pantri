@@ -67,5 +67,6 @@
 
 ## Offline website
 - The lists page works offline from a copy kept in the browser, with the same change queue and sync as the Android app; it syncs when the server is reachable and shows live updates when online.
+- Adding recipes to lists (choose recipes, multipliers, ingredients, stores) also works offline; the items join the same queue.
 - A service worker caches pages and files: recipes, catalog and settings open read-only offline. Needs the HTTPS address. Logging out clears the device's saved data.
 

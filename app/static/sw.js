@@ -13,7 +13,9 @@ const PAGES = "pages-" + VERSION;
 const CORE = [
   "/static/css/app.css?v=" + VERSION,
   "/static/js/app.js?v=" + VERSION,
+  "/static/js/household.js?v=" + VERSION,
   "/static/js/lists.js?v=" + VERSION,
+  "/static/js/plan.js?v=" + VERSION,
   "/static/vendor/htmx.min.js",
   "/static/vendor/Sortable.min.js",
   "/static/fonts/SchibstedGrotesk-400-900.woff2",

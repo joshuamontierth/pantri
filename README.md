@@ -10,7 +10,7 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Recipes:** ingredients have amounts and units, plus directions and an optional link to where the recipe came from. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups, 1 gal + 4 cups = 1¼ gal; US measures).
 - **Cooking:** the recipe page shows the directions as numbered steps. Tap a step to mark it done, and turn on **Keep screen on** so the phone doesn't dim while you cook.
 - **Import a recipe:** from photos of a recipe card or cookbook (ingredients and directions can be in different photos), or from a link to a recipe website. It opens filled in for you to check and save. See [Importing recipes](#importing-recipes).
-- **Works offline:** the lists page keeps working without a connection (check off, add, edit) and syncs when it's back; other pages open as last seen. See [Offline (website)](#offline-website).
+- **Works offline:** the lists page and adding recipes to lists keep working without a connection and sync when it's back; other pages open as last seen. See [Offline (website)](#offline-website).
 - **Android app:** works offline (in a store with no signal, say) and syncs when it can reach the server, with live updates while it's open. See [Android app](#android-app).
 - **Add details to a recipe:** on a recipe you already have, **Add details** reads a photo or link and fills in only what's missing, like directions. See [Adding details](#adding-details-to-an-existing-recipe).
 
@@ -138,12 +138,13 @@ The server running the app has to be able to reach it. If it can't, importing fr
 Open the site once with a connection on each device, using the **HTTPS address** (browsers only allow offline support on HTTPS). After that:
 
 - **Lists** work fully offline. Check off, add (with suggestions), edit, delete, clear checked and reorder; changes show straight away and are saved on the device. The header shows **Offline · 3** (three changes waiting) and **Syncing** while they're sent. A small dot on a box marks an item that hasn't reached the server yet.
-- **Recipes, catalog and settings** open as they were last seen (recipes are saved in the background whenever the lists page is open). Changing them, importing, and adding recipes to lists need a connection; a page that isn't saved yet shows an "You're offline" page.
+- **Adding recipes to lists** works offline too: choose recipes, set multipliers, check what you need and pick stores, all from the copy on the device. The items join the same queue and appear on your lists straight away.
+- **Recipes, catalog and settings** open as they were last seen (recipes are saved in the background whenever the lists page is open). Changing them and importing need a connection; a page that isn't saved yet shows a "You're offline" page.
 - Changes are sent the next time the site is open with a connection. Each one is applied once, so nothing doubles up; a change to an item someone else deleted meanwhile is skipped.
 - **Add to Home Screen** (Safari's Share menu, or Chrome's menu) to open it like an app, offline too.
 - **Log out** clears the lists and pages saved on that device.
 
-The lists page uses the same sync API as the Android app ([app/static/js/lists.js](app/static/js/lists.js)); [app/static/sw.js](app/static/sw.js) is the service worker that keeps pages and files cached.
+Both pages share [app/static/js/household.js](app/static/js/household.js): the copy of the household, the change queue, and syncing through the same API as the Android app. [lists.js](app/static/js/lists.js) and [plan.js](app/static/js/plan.js) draw the pages, and [sw.js](app/static/sw.js) is the service worker that keeps pages and files cached.
 
 ## Android app
 
@@ -244,11 +245,11 @@ Run the tests (they never call the real Ollama server):
 | `app/quantities.py` | Parsing, unit conversion, merging and fraction display |
 | `app/routes/api.py` | JSON API for the Android app (sync, live events) |
 | `android/` | The Android app; `data/` is sync and offline storage, `ui/` the screens |
-| `app/static/js/lists.js`, `app/static/sw.js` | Offline lists page and the service worker |
+| `app/static/js/household.js`, `lists.js`, `plan.js`, `app/static/sw.js` | Offline sync (shared), the lists page, the recipe picker, and the service worker |
 | `app/scan.py` | Asking the Ollama model to read recipes (photos, page text, ingredient lines) |
 | `app/importer.py` | Fetching recipe links (public addresses only) and reading their recipe data |
 | `app/directions.py` | Splitting directions into steps |
-| `app/routes/` | Auth, households, lists (+ live events), stores, catalog, recipes (+ import), plan (recipe → lists picker) |
+| `app/routes/` | Auth, households, lists (+ live events), stores, catalog, recipes (+ import), plan (the recipe picker page) |
 | `app/templates/`, `app/static/` | Server-rendered pages (Jinja2 + htmx), CSS and JS |
 
 Live updates use Server-Sent Events broadcast in-process, so run a **single** worker. The Docker image already does.

@@ -11,7 +11,7 @@
   <h1 class="page-title">{{ recipe.name }}</h1>
   {% if source_site %}<a class="source-link" href="{{ recipe.source_url }}" target="_blank" rel="noopener noreferrer">{{ source_site }}{{ icon("external", 15, 2) }}</a>{% endif %}
 
-  <a class="btn primary block" href="/h/{{ hid }}/plan/pick?r={{ recipe.id }}">Add to lists</a>
+  <a class="btn primary block" href="/h/{{ hid }}/plan#step=pick&amp;r={{ recipe.id }}">Add to lists</a>
 
   <h2 class="section-label">Ingredients</h2>
   <ul class="rows">

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% set nav = "recipes" %}
+{% block title %}Add recipes · {{ household.name }}{% endblock %}
+{% block body_attrs %}data-household="{{ household.id }}" data-plan-page{% endblock %}
+{% block scripts %}
+<script src="/static/js/household.js?v={{ static_v }}" defer></script>
+<script src="/static/js/plan.js?v={{ static_v }}" defer></script>
+{% endblock %}
+{% block content %}
+{# plan.js draws the picker here from the household copy, so it works offline too. #}
+<div class="narrow" id="plan">
+  <a class="back-link" href="/h/{{ household.id }}/recipes">{{ icon("chevron-left", 18) }}Recipes</a>
+  <h1 class="page-title">Choose recipes</h1>
+</div>
+<script type="application/json" id="initial-state" data-at="{{ generated_ms }}">{{ state|tojson }}</script>
+{% endblock %}

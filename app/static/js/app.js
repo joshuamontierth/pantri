@@ -576,89 +576,6 @@
     });
   }
 
-  // ---------- choosing recipes ----------
-  function initChoose(button) {
-    const form = button.form;
-    const update = () => {
-      const n = form.querySelectorAll('input[name="r"]:checked').length;
-      button.textContent = n ? "Next: " + n + " recipe" + (n === 1 ? "" : "s") : "Choose at least one recipe";
-      button.disabled = n === 0;
-    };
-    form.addEventListener("change", update);
-    update();
-  }
-
-  // ---------- recipes to lists picker ----------
-  function initPlanPicker(form) {
-    const applyBtn = form.querySelector("[data-apply-button]");
-    const applyMain = applyBtn.querySelector(".apply-main");
-    const applySub = applyBtn.querySelector("[data-apply-sub]");
-
-    function updateCount() {
-      const rows = Array.from(form.querySelectorAll(".pick-row")).filter((r) => r.querySelector('input[name="include"]').checked);
-      const n = rows.length;
-      applyMain.textContent = n ? "Add " + n + " item" + (n === 1 ? "" : "s") + " to lists" : "Check the items you need";
-      applyBtn.disabled = n === 0;
-      const perStore = new Map();
-      rows.forEach((r) => {
-        const opt = r.querySelector(".pick-store").selectedOptions[0];
-        const name = opt ? opt.dataset.name : OTHER;
-        perStore.set(name, (perStore.get(name) || 0) + 1);
-      });
-      applySub.textContent = Array.from(perStore, ([name, count]) => name + " " + count).join(" · ");
-    }
-
-    form.addEventListener("change", (e) => {
-      if (e.target.matches(".mult")) htmx.trigger("#plan-rows", "recalc");
-      if (e.target.matches('input[name="include"]')) {
-        e.target.closest(".pick-row").classList.toggle("on", e.target.checked);
-        if (e.target.checked) buzz(8);
-      }
-      if (e.target.matches(".pick-store")) {
-        const box = e.target.closest(".pick-row").querySelector('input[name="include"]');
-        if (!box.checked) { box.checked = true; e.target.closest(".pick-row").classList.add("on"); }
-      }
-      updateCount();
-    });
-    form.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target.matches(".mult")) { e.preventDefault(); e.target.blur(); }
-    });
-    form.querySelector("[data-select-all]").addEventListener("click", () => {
-      const boxes = Array.from(form.querySelectorAll('input[name="include"]'));
-      const all = boxes.every((b) => b.checked);
-      boxes.forEach((b) => { b.checked = !all; b.closest(".pick-row").classList.toggle("on", !all); });
-      updateCount();
-    });
-    // Rows are re-rendered when scaling changes. Keep the user's latest checks and store
-    // choices (a tap can land while the request is in flight, so trust the DOM, not the request).
-    let saved = null;
-    document.addEventListener("htmx:beforeSwap", (e) => {
-      if (e.detail.target.id !== "plan-rows") return;
-      saved = {};
-      form.querySelectorAll(".pick-row").forEach((row) => {
-        const box = row.querySelector('input[name="include"]');
-        saved[box.value] = { checked: box.checked, store: row.querySelector(".pick-store").value };
-      });
-    });
-    document.addEventListener("htmx:afterSwap", (e) => {
-      if (e.detail.target.id !== "plan-rows") return;
-      if (saved) {
-        form.querySelectorAll(".pick-row").forEach((row) => {
-          const box = row.querySelector('input[name="include"]');
-          const prev = saved[box.value];
-          if (!prev) return;
-          box.checked = prev.checked;
-          row.classList.toggle("on", prev.checked);
-          const sel = row.querySelector(".pick-store");
-          if (sel.querySelector('option[value="' + prev.store + '"]')) sel.value = prev.store;
-        });
-        saved = null;
-      }
-      updateCount();
-    });
-    updateCount();
-  }
-
   document.addEventListener("DOMContentLoaded", () => {
     const editor = document.querySelector("[data-recipe-editor]");
     if (editor) initRecipeEditor(editor);
@@ -666,9 +583,5 @@
     if (steps) initSteps(steps);
     const wake = document.querySelector("[data-wake-lock]");
     if (wake) initWakeLock(wake);
-    const choose = document.querySelector("[data-choose-button]");
-    if (choose) initChoose(choose);
-    const plan = document.querySelector("[data-plan-form]");
-    if (plan) initPlanPicker(plan);
   });
 })();

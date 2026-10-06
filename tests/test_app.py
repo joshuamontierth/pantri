@@ -133,50 +133,42 @@ def test_recipe_to_lists_flow(make_user):
         cheese_id = s.query(models.CatalogItem).filter_by(name_lower="cheese").one().id
         milk_id = s.query(models.CatalogItem).filter_by(name_lower="milk").one().id
 
-    # Picker page: everything unchecked, primary store preselected.
-    page = alice.get(f"/h/{hid}/plan/pick?r={pancakes}&r={quiche}&m_{pancakes}=2").text
-    assert "Serves" not in page
-    assert "checked" not in page.split('id="plan-rows"')[1].split("sticky-actions")[0].replace("checked=", "")
-    assert "Costco · 1st" in page and "Walmart · 2nd" in page
+    # The picker page carries the household for plan.js (which works offline): recipes with their
+    # amounts, and each item's store ranking.
+    import json
+    import re
+    page = alice.get(f"/h/{hid}/plan").text
+    assert "/static/js/plan.js?v=" in page and "data-plan-page" in page
+    state = json.loads(re.search(r'id="initial-state"[^>]*>(.*?)</script>', page, re.S).group(1))
+    by_name = {r["name"]: r for r in state["recipes"]}
+    assert [(i["name"], i["amount"], i["unit"]) for i in by_name["Quiche"]["ingredients"]] == [
+        ("Eggs", 4.0, ""), ("Flour", 4.0, "tbsp"), ("Cheese", 8.0, "oz")]
+    assert next(c for c in state["catalog"] if c["name"] == "Flour")["ranks"] == [costco, walmart]
+    # Old links to the picker land on the new page with their selection.
+    r = alice.get(f"/h/{hid}/plan/pick?r={pancakes}&r={quiche}&m_{pancakes}=2")
+    assert r.status_code == 303 and r.headers["location"] == f"/h/{hid}/plan#step=pick&r={pancakes}&r={quiche}&m_{pancakes}=2"
 
     # Eggs already on the Costco list -> merge.
     alice.post(f"/h/{hid}/items", {"name": "Eggs", "qty": "12", "target": str(costco)}, htmx=True)
 
-    r = alice.post(f"/h/{hid}/plan/apply", {
-        "r": [str(pancakes), str(quiche)], f"m_{pancakes}": "2", f"m_{quiche}": "1",
-        "include": [str(flour.id), str(eggs_id), str(cheese_id)],
-        f"store_{flour.id}": str(walmart),  # pick the secondary store
-        f"store_{eggs_id}": str(costco),
-        f"store_{cheese_id}": str(walmart),
-        f"store_{milk_id}": "none",  # not included -> ignored
-    })
-    assert r.status_code == 303 and "added=3" in r.headers["location"]
+    # What plan.js queues for Pancakes x2 + Quiche, with Flour sent to its 2nd store and Milk left out.
+    ops = [
+        {"op_id": "p1", "type": "add", "ref": "a", "name": "Flour", "parts": [[4.25, "cup"]], "store": walmart, "tags": ["Pancakes", "Quiche"]},
+        {"op_id": "p2", "type": "add", "ref": "b", "name": "Eggs", "parts": [[8, ""]], "store": costco, "tags": ["Pancakes", "Quiche"]},
+        {"op_id": "p3", "type": "add", "ref": "c", "name": "Cheese", "parts": [[8, "oz"]], "store": walmart, "tags": ["Quiche"]},
+    ]
+    r = alice.client.post(f"/api/v1/h/{hid}/ops", json={"ops": ops}, headers={"X-CSRF-Token": alice.csrf})
+    assert r.status_code == 200 and [x["status"] for x in r.json()["results"]] == ["ok"] * 3
 
     costco_items = {i.name: i for i in items(hid, costco)}
     walmart_items = {i.name: i for i in items(hid, walmart)}
     assert costco_items["Eggs"].quantities == [[12 + 4 + 4, ""]]  # 12 + 2x2 + 4
     assert costco_items["Eggs"].recipe_tags == ["Pancakes", "Quiche"]
-    # 2x2 cups + 4 tbsp = 4.25 cups
+    assert costco_items["Eggs"].catalog_item_id == eggs_id
     assert round(walmart_items["Flour"].quantities[0][0], 4) == 4.25
     assert walmart_items["Cheese"].quantities == [[8.0, "oz"]]
     assert "Milk" not in costco_items and not items(hid, None)
-
-
-def test_plan_rows_fragment_preserves_choices(make_user):
-    alice = make_user("alice")
-    hid = alice.create_household()
-    s1 = alice.add_store(hid, "S1")
-    alice.post(f"/h/{hid}/recipes", {
-        "name": "Toast", "ing_name": ["Bread"], "ing_amount": ["2"], "ing_unit": ["slices"],
-        "ing_ranks": [str(s1)], "ing_ranks_dirty": ["0"],
-    })
-    with session() as s:
-        rid = s.query(models.Recipe).one().id
-        bid = s.query(models.CatalogItem).one().id
-    r = alice.post(f"/h/{hid}/plan/rows", {"r": str(rid), f"m_{rid}": "3", "include": str(bid), f"store_{bid}": "none"}, htmx=True)
-    assert "6 slices" in r.text
-    assert 'value="%d" checked' % bid in r.text
-    assert '<option value="none" data-name="Other" selected>' in r.text
+    assert milk_id and cheese_id
 
 
 def test_recipe_validation_errors(make_user):
@@ -326,7 +318,7 @@ def test_pages_render(make_user):
     for url in [
         f"/h/{hid}", f"/h/{hid}/stores", f"/h/{hid}/catalog", f"/h/{hid}/catalog/new?name=Y",
         f"/h/{hid}/catalog/{cid}", f"/h/{hid}/recipes", f"/h/{hid}/recipes/new", f"/h/{hid}/recipes/{rid}",
-        f"/h/{hid}/recipes/{rid}/edit", f"/h/{hid}/plan", f"/h/{hid}/plan/pick?r={rid}", f"/h/{hid}/settings",
+        f"/h/{hid}/recipes/{rid}/edit", f"/h/{hid}/plan", f"/h/{hid}/settings",
         f"/h/{hid}/items/{iid}/edit", f"/h/{hid}/lists/refresh?stores=all", "/account", "/account/password", "/households",
     ]:
         r = alice.get(url)
