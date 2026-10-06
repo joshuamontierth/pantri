@@ -10,6 +10,7 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Recipes:** ingredients have amounts and units, plus directions and an optional link to where the recipe came from. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups).
 - **Cooking:** the recipe page shows the directions as numbered steps. Tap a step to mark it done, and turn on **Keep screen on** so the phone doesn't dim while you cook.
 - **Import a recipe:** from photos of a recipe card or cookbook (ingredients and directions can be in different photos), or from a link to a recipe website. It opens filled in for you to check and save. See [Importing recipes](#importing-recipes).
+- **Android app:** works offline (in a store with no signal, say) and syncs when it can reach the server, with live updates while it's open. See [Android app](#android-app).
 - **Add details to a recipe:** on a recipe you already have, **Add details** reads a photo or link and fills in only what's missing, like directions. See [Adding details](#adding-details-to-an-existing-recipe).
 
 ## Run it (Docker)
@@ -131,6 +132,63 @@ Set these in `docker-compose.yml`:
 
 The server running the app has to be able to reach it. If it can't, importing from photos shows an error, links fall back to simpler parsing, and recipes can still be typed in by hand.
 
+## Android app
+
+A native app (Kotlin + Jetpack Compose) in [`android/`](android/). It talks to the same server and account as the website, and the website keeps working as before.
+
+### Install
+
+- **From the website:** gear → **Android app** → **Download the app**, on the phone. The section only appears once the APK has been put on the server (below). Android asks once to allow installs from your browser.
+- **Over USB:** `adb install -r android/dist/ShoppingList.apk`
+
+Open it and log in with the server address (`https://shopping.example.com`), your username and password. The phone needs Tailscale on to reach the server, just like the website.
+
+### What it does
+
+- **Lists:** swipe between stores, check off, add with catalog suggestions (with the one-tap "+ usual store"), edit, move, delete, clear checked (with undo), drag to reorder.
+- **Recipes:** search, read ingredients and directions (tap a step when it's done, keep the screen on), and add one or several recipes to the lists with a multiplier and a store per ingredient.
+- Stores, the catalog, members, and importing or editing recipes stay on the website (Settings → Open the website).
+
+### Offline and live updates
+
+- Everything above works without a connection. The phone keeps a copy of the household, and changes are queued on the phone and shown straight away (a small grey dot marks a row that hasn't synced yet).
+- When the server is reachable again the queue is sent, oldest first, and the phone takes the server's state. If you close the app first, Android sends the queue in the background once there's a network.
+- Every change has an id and the server applies each one once, so a change resent after a dropped connection doesn't count twice. A change to an item someone else deleted meanwhile is skipped.
+- While the app is open it holds a live connection, so changes from the website or other phones show up within a second or two. The header shows **Live**, **Offline · 3 waiting**, and so on.
+
+### Build it
+
+Needs the Android SDK (`android/local.properties` points at it) and JDK 17+.
+
+```bash
+cd android && ./gradlew testDebugUnitTest assembleRelease
+```
+
+The signed APK is `android/app/build/outputs/apk/release/app-release.apk`; copy it to `android/dist/ShoppingList.apk`. Release signing reads `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`), which with `release.keystore` stays out of git: back both up, because updates must be signed with the same key. Without it the build falls back to the debug key.
+
+### Put it on the server
+
+```bash
+scp android/dist/ShoppingList.apk you@server:~/shopping_list/
+```
+
+```bash
+ssh you@server 'cd ~/shopping_list && docker compose cp ShoppingList.apk shopping:/data/ShoppingList.apk'
+```
+
+It lives in the data volume, so it survives rebuilds. Bump `versionCode` in `android/app/build.gradle.kts` for each new version.
+
+### API
+
+The app uses `/api/v1` ([app/routes/api.py](app/routes/api.py)), with a bearer token from `POST /api/v1/login` (the same sessions as the website):
+
+| Endpoint | |
+| --- | --- |
+| `POST /login`, `POST /logout`, `GET /me` | Token, user and households |
+| `GET /h/{id}/state` | The whole household: stores, list items, catalog, recipes (with an ETag) |
+| `POST /h/{id}/ops` | A batch of changes (`add`, `check`, `update`, `delete`, `reorder`, `restore`), each with an `op_id`; returns per-change results and fresh state |
+| `GET /h/{id}/events` | Live updates (Server-Sent Events) |
+
 ## Accounts
 
 - Anyone can sign up at `/signup`.
@@ -171,6 +229,8 @@ Run the tests (they never call the real Ollama server):
 | `app/models.py` | SQLAlchemy models |
 | `app/services.py` | List merging, moving, store deletion, catalog helpers |
 | `app/quantities.py` | Parsing, unit conversion, merging and fraction display |
+| `app/routes/api.py` | JSON API for the Android app (sync, live events) |
+| `android/` | The Android app; `data/` is sync and offline storage, `ui/` the screens |
 | `app/scan.py` | Asking the Ollama model to read recipes (photos, page text, ingredient lines) |
 | `app/importer.py` | Fetching recipe links (public addresses only) and reading their recipe data |
 | `app/directions.py` | Splitting directions into steps |

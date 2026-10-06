@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from .. import directions, importer, quantities, scan, services
 from ..db import get_db
 from ..deps import form_data, household_member
+from ..events import broker
 from ..models import Household, Membership, Recipe, RecipeIngredient
 from ..templating import render
 
@@ -362,6 +363,7 @@ def create_recipe(request: Request, household_id: int, form=Depends(form_data), 
     db.flush()
     _save_ingredients(db, household_id, recipe, parsed)
     db.commit()
+    broker.publish(household_id, "recipes")
     return RedirectResponse(f"/h/{household_id}/recipes/{recipe.id}", status_code=303)
 
 
@@ -415,6 +417,7 @@ def update_recipe(request: Request, household_id: int, recipe_id: int, form=Depe
     recipe.source_url = source_url or None
     _save_ingredients(db, household_id, recipe, parsed)
     db.commit()
+    broker.publish(household_id, "recipes")
     return RedirectResponse(f"/h/{household_id}/recipes/{recipe.id}", status_code=303)
 
 
@@ -422,6 +425,7 @@ def update_recipe(request: Request, household_id: int, recipe_id: int, form=Depe
 def delete_recipe(household_id: int, recipe_id: int, membership=Depends(household_member), db: Session = Depends(get_db)):
     db.delete(_get_recipe(db, household_id, recipe_id))
     db.commit()
+    broker.publish(household_id, "recipes")
     return RedirectResponse(f"/h/{household_id}/recipes", status_code=303)
 
 
@@ -443,4 +447,5 @@ def copy_recipe(
             item = services.create_catalog_item(db, target_household_id, ing.catalog_item.name)
         db.add(RecipeIngredient(recipe_id=copy.id, catalog_item_id=item.id, amount=ing.amount, unit=ing.unit, position=ing.position))
     db.commit()
+    broker.publish(target_household_id, "recipes")
     return RedirectResponse(f"/h/{target_household_id}/recipes/{copy.id}?copied=1", status_code=303)

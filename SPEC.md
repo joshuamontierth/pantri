@@ -59,3 +59,9 @@
 - Units: common list (tsp, tbsp, cup, fl oz, ml, L, oz, lb, g, kg, each) + free-text custom units (can, bunch, clove…). Quantity is optional (e.g. "salt").
 - Merging converts within a unit type (volume ↔ volume, weight ↔ weight), shown in the existing line's unit. Custom units only merge with the same unit. Incompatible units stay on one line: `2 cups + 1 lb`.
 - Display as kitchen fractions (1½ cups, ¾ tsp), rounded to common fractions.
+
+## Android app
+- Native client for the same server and accounts; the website stays fully usable.
+- Lists and recipes work offline from a copy kept on the phone. Changes queue on the phone and sync when the server is reachable (also in the background after the app is closed); each change is applied once by the server.
+- Live updates while the app is open. Stores, catalog, members and recipe editing/import stay on the website.
+

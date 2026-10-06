@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A notepad with two ruled lines and a blue check: the web app's look. 108dp canvas, 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FCFBF8"
+        android:strokeColor="#1C1B18"
+        android:strokeWidth="3.5"
+        android:pathData="M38,30 h32 a5,5 0 0 1 5,5 v38 a5,5 0 0 1 -5,5 h-32 a5,5 0 0 1 -5,-5 v-38 a5,5 0 0 1 5,-5 z" />
+    <path
+        android:strokeColor="#3350D4"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M41,47 l5,5 l9,-10" />
+    <path
+        android:strokeColor="#1C1B18"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M59,48 h8 M41,62 h26" />
+</vector>

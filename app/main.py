@@ -2,7 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException
@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException
 from . import config, db, security
 from .deps import LoginRequired, RedirectTo, login_url
 from .events import broker
-from .routes import auth, catalog, households, lists, plan, recipes, stores
+from .routes import api, auth, catalog, households, lists, plan, recipes, stores
 from .templating import render
 
 
@@ -48,7 +48,7 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 app.add_middleware(SessionCookieRefresh)
 app.mount("/static", StaticFiles(directory=str(config.BASE_DIR / "static")), name="static")
 
-for module in (auth, households, lists, stores, catalog, recipes, plan):
+for module in (api, auth, households, lists, stores, catalog, recipes, plan):
     app.include_router(module.router)
 
 
@@ -71,6 +71,8 @@ async def _redirect_to(request: Request, exc: RedirectTo):
 @app.exception_handler(HTTPException)
 async def _http_error(request: Request, exc: HTTPException):
     message = exc.detail if isinstance(exc.detail, str) else "Something went wrong."
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": message}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
     if request.headers.get("HX-Request"):
         # Shown by app.js as a toast.
         return HTMLResponse(message, status_code=exc.status_code)

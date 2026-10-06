@@ -181,7 +181,7 @@ def snapshot(items):
     ], separators=(",", ":"))
 
 
-def _clean_qty(value):
+def clean_qty(value):
     parts = []
     for part in value if isinstance(value, list) else []:
         if not (isinstance(part, list) and len(part) == 2 and isinstance(part[1], str)):
@@ -211,7 +211,7 @@ def restore_snapshot(db, household_id, snap):
         catalog_item = db.get(CatalogItem, cid)
         if catalog_item is None or catalog_item.household_id != household_id:
             catalog_item = None
-    qty = _clean_qty(snap.get("q"))
+    qty = clean_qty(snap.get("q"))
     note = str(snap.get("o") or "")[:300]
     tags = [str(t)[:150] for t in (snap.get("t") if isinstance(snap.get("t"), list) else [])][:20]
     position = parse_int(snap.get("p"))

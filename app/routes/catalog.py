@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from .. import services
 from ..db import get_db
 from ..deps import household_member
+from ..events import broker
 from ..models import CatalogItem
 from ..templating import render
 
@@ -128,6 +129,7 @@ def create_item(
         return _form(request, db, membership, name=name, rank_ids=rank_ids, error=error, next_url=next, status_code=400)
     services.create_catalog_item(db, household_id, name, rank_ids)
     db.commit()
+    broker.publish(household_id, "catalog")
     return RedirectResponse(_safe_next(household_id, next), status_code=303)
 
 
@@ -152,6 +154,7 @@ def update_item(
         services.rename_catalog_item(db, item, name)
     services.set_ranks(db, item, rank_ids)
     db.commit()
+    broker.publish(household_id, "catalog")
     # Back to the catalog list, which reopens on the filter the user last picked.
     return RedirectResponse(_safe_next(household_id, next), status_code=303)
 
@@ -165,4 +168,5 @@ def delete_item(request: Request, household_id: int, item_id: int, membership=De
         return _form(request, db, membership, item=item, error=f"Can't delete: used by {names}. Remove it from those recipes first.", status_code=400)
     db.delete(item)
     db.commit()
+    broker.publish(household_id, "catalog")
     return RedirectResponse(f"/h/{household_id}/catalog", status_code=303)

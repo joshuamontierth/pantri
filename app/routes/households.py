@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from .. import security, services
+from .. import config, security, services
 from ..db import get_db
 from ..deps import current_user, household_admin, household_member
 from ..events import broker
@@ -121,11 +121,22 @@ def _settings_page(request, db, membership, error=None, notice=None, status_code
     return render(
         request,
         "households/settings.html",
-        {"members": members, "invites": invites, "error": error, "notice": notice},
+        {"members": members, "invites": invites, "error": error, "notice": notice, "android_apk": ANDROID_APK.exists()},
         db=db,
         membership=membership,
         status_code=status_code,
     )
+
+
+# Put a built app here (see README, "Android app") to offer it on the settings page.
+ANDROID_APK = config.DATA_DIR / "ShoppingList.apk"
+
+
+@router.get("/android/ShoppingList.apk")
+def android_apk(user=Depends(current_user)):
+    if not ANDROID_APK.exists():
+        raise HTTPException(404, "The Android app hasn't been put on this server.")
+    return FileResponse(ANDROID_APK, media_type="application/vnd.android.package-archive", filename="ShoppingList.apk")
 
 
 @router.get("/h/{household_id}/settings")

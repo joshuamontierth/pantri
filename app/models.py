@@ -193,3 +193,21 @@ class RecipeIngredient(Base):
 
     recipe: Mapped[Recipe] = relationship(back_populates="ingredients")
     catalog_item: Mapped[CatalogItem] = relationship()
+
+
+class SyncOp(Base):
+    """A change sent by the Android app, recorded so a resend (after a dropped connection) isn't applied twice.
+
+    client_ref is the app's own id for an item it added offline, so later changes can point at it.
+    """
+
+    __tablename__ = "sync_ops"
+    __table_args__ = (UniqueConstraint("household_id", "op_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    op_id: Mapped[str] = mapped_column(String(64))
+    client_ref: Mapped[str | None] = mapped_column(String(64), index=True)
+    item_id: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="ok")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
