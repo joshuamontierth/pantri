@@ -2,11 +2,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from .. import services
+from .. import actions, services
 from ..db import get_db
 from ..deps import household_member
-from ..events import broker
-from ..models import CatalogItem
 from ..templating import render
 
 router = APIRouter()
@@ -26,19 +24,10 @@ def _safe_next(household_id, next_url):
 
 
 def _get_item(db, household_id, item_id):
-    item = db.get(CatalogItem, item_id)
-    if item is None or item.household_id != household_id:
-        raise HTTPException(404, "Catalog item not found")
-    return item
-
-
-def _name_error(db, household_id, name, exclude_id=None):
-    if not name or len(name) > 100:
-        return "Name must be 1 to 100 characters."
-    existing = services.find_catalog_item(db, household_id, name)
-    if existing is not None and existing.id != exclude_id:
-        return f"“{existing.name}” is already in the catalog."
-    return None
+    try:
+        return actions.get_catalog_item(db, household_id, item_id)
+    except actions.ActionError as e:
+        raise HTTPException(404, e.message)
 
 
 # ---- the store filter, remembered per household in a cookie ----
@@ -122,14 +111,11 @@ def create_item(
     name: str = Form(""), ranks: str = Form(""), next: str = Form(""),
     membership=Depends(household_member), db: Session = Depends(get_db),
 ):
-    name = name.strip()
     rank_ids = services.parse_rank_ids(db, household_id, ranks)
-    error = _name_error(db, household_id, name)
-    if error:
-        return _form(request, db, membership, name=name, rank_ids=rank_ids, error=error, next_url=next, status_code=400)
-    services.create_catalog_item(db, household_id, name, rank_ids)
-    db.commit()
-    broker.publish(household_id, "catalog")
+    try:
+        actions.create_catalog_item(db, household_id, name, rank_ids)
+    except actions.ActionError as e:
+        return _form(request, db, membership, name=name.strip(), rank_ids=rank_ids, error=e.message, next_url=next, status_code=400)
     return RedirectResponse(_safe_next(household_id, next), status_code=303)
 
 
@@ -145,16 +131,11 @@ def update_item(
     membership=Depends(household_member), db: Session = Depends(get_db),
 ):
     item = _get_item(db, household_id, item_id)
-    name = name.strip()
     rank_ids = services.parse_rank_ids(db, household_id, ranks)
-    error = _name_error(db, household_id, name, exclude_id=item.id)
-    if error:
-        return _form(request, db, membership, item=item, name=name, rank_ids=rank_ids, error=error, next_url=next, status_code=400)
-    if name != item.name:
-        services.rename_catalog_item(db, item, name)
-    services.set_ranks(db, item, rank_ids)
-    db.commit()
-    broker.publish(household_id, "catalog")
+    try:
+        actions.update_catalog_item(db, household_id, item_id, name, rank_ids)
+    except actions.ActionError as e:
+        return _form(request, db, membership, item=item, name=name.strip(), rank_ids=rank_ids, error=e.message, next_url=next, status_code=400)
     # Back to the catalog list, which reopens on the filter the user last picked.
     return RedirectResponse(_safe_next(household_id, next), status_code=303)
 
@@ -162,11 +143,8 @@ def update_item(
 @router.post("/h/{household_id}/catalog/{item_id}/delete")
 def delete_item(request: Request, household_id: int, item_id: int, membership=Depends(household_member), db: Session = Depends(get_db)):
     item = _get_item(db, household_id, item_id)
-    used_by = services.recipes_using(db, item.id)
-    if used_by:
-        names = ", ".join(r.name for r in used_by)
-        return _form(request, db, membership, item=item, error=f"Can't delete: used by {names}. Remove it from those recipes first.", status_code=400)
-    db.delete(item)
-    db.commit()
-    broker.publish(household_id, "catalog")
+    try:
+        actions.delete_catalog_item(db, household_id, item_id)
+    except actions.ActionError as e:
+        return _form(request, db, membership, item=item, error=e.message, status_code=400)
     return RedirectResponse(f"/h/{household_id}/catalog", status_code=303)

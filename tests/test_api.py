@@ -190,14 +190,22 @@ def test_household_with_sync_records_can_be_deleted(make_user):
         assert s.query(models.SyncOp).count() == 0
 
 
-def test_password_reset_blocks_api(make_user):
+def test_forced_password_change_in_the_app(make_user):
     alice = make_user("alice")
-    alice.create_household()
+    hid = alice.create_household()
     with session() as s:
         s.query(models.User).filter_by(username="alice").one().must_change_password = True
         s.commit()
-    r = TestClient(app).post("/api/v1/login", json={"username": "alice", "password": "password123"})
-    assert r.status_code == 403 and "new password" in r.json()["detail"]
+    phone = App("alice")
+    assert phone.login["must_change_password"] is True
+    # Like the website: nothing else until a new password is chosen.
+    r = phone.get(f"/api/v1/h/{hid}/state")
+    assert r.status_code == 403 and r.json()["detail"] == "Choose a new password first."
+    r = phone.client.post("/api/v1/account/password", json={"password": "password123", "confirm": "password123"}, headers=phone.headers)
+    assert r.status_code == 400 and r.json()["detail"] == "Choose a password different from the temporary one."
+    r = phone.client.post("/api/v1/account/password", json={"password": "brand-new-pw", "confirm": "brand-new-pw"}, headers=phone.headers)
+    assert r.status_code == 200 and r.json()["must_change_password"] is False
+    assert phone.get(f"/api/v1/h/{hid}/state").status_code == 200
 
 
 def test_android_app_download(make_user, tmp_path, monkeypatch):
@@ -234,3 +242,142 @@ def test_offline_support_pieces(make_user):
     assert "data-anon" in TestClient(app).get("/login").text
     r = alice.post("/logout")
     assert r.headers["clear-site-data"] == '"cache", "storage"'
+
+
+def _api(phone, method, url, **kw):
+    return getattr(phone.client, method)(url, headers=phone.headers, **kw)
+
+
+def test_account_and_households_match_the_website(make_user):
+    c = TestClient(app)
+    r = c.post("/api/v1/signup", json={"username": "x", "password": "password123", "confirm": "password123"})
+    assert r.status_code == 400 and r.json()["detail"].startswith("Username must be 3–32 characters")
+    r = c.post("/api/v1/signup", json={"username": "carol", "password": "password123", "confirm": "nope"})
+    assert r.status_code == 400 and r.json()["detail"] == "Passwords don't match."
+    r = c.post("/api/v1/signup", json={"username": "carol", "password": "password123", "confirm": "password123"})
+    assert r.status_code == 200 and r.json()["token"] and r.json()["households"] == []
+    assert c.post("/api/v1/signup", json={"username": "Carol", "password": "password123", "confirm": "password123"}).json()["detail"] == "That username is taken."
+    make_user("bob")
+
+    alice_web = make_user("alice")
+    alice = App("alice")
+    carol = App("carol")
+    bob = App("bob")
+    r = _api(alice, "post", "/api/v1/households", json={"name": ""})
+    assert r.status_code == 400 and r.json()["detail"] == "Give the household a name (up to 100 characters)."
+    hid = _api(alice, "post", "/api/v1/households", json={"name": "Home"}).json()["household_id"]
+
+    # Invites: the website's checks and messages.
+    assert _api(alice, "post", f"/api/v1/h/{hid}/invites", json={"username": "nobody"}).json()["detail"] == "No user named “nobody”. They need to sign up first."
+    r = _api(alice, "post", f"/api/v1/h/{hid}/invites", json={"username": "carol"})
+    assert r.json()["notice"] == "Invited carol" and [i["username"] for i in r.json()["invites"]] == ["carol"]
+    assert _api(alice, "post", f"/api/v1/h/{hid}/invites", json={"username": "carol"}).json()["detail"] == "carol already has a pending invite."
+    invite = carol.get("/api/v1/me").json()["invites"][0]
+    assert invite["household"] == "Home" and invite["invited_by"] == "alice"
+    r = _api(carol, "post", f"/api/v1/invites/{invite['id']}/accept")
+    assert r.json()["household_id"] == hid and [h["name"] for h in r.json()["households"]] == ["Home"]
+    # The website sees the same household and members.
+    assert "carol" in alice_web.get(f"/h/{hid}/settings").text
+
+    # Members: only admins manage, at least one admin, can't remove yourself.
+    settings = carol.get(f"/api/v1/h/{hid}/settings").json()
+    assert settings["role"] == "member" and settings["invites"] == []
+    carol_member = next(m for m in settings["members"] if m["username"] == "carol")
+    alice_member = next(m for m in settings["members"] if m["username"] == "alice")
+    assert _api(carol, "post", f"/api/v1/h/{hid}/rename", json={"name": "Mine"}).status_code == 403
+    assert _api(alice, "post", f"/api/v1/h/{hid}/members/{alice_member['id']}/role", json={"role": "member"}).json()["detail"] == \
+        "A household needs at least one admin. Make someone else an admin first."
+    assert _api(alice, "delete", f"/api/v1/h/{hid}/members/{alice_member['id']}").json()["detail"] == "To remove yourself, use “Leave household”."
+    r = _api(alice, "post", f"/api/v1/h/{hid}/members/{carol_member['id']}/reset-password", json={"temp_password": "temp-pass-1"})
+    assert r.json()["notice"] == "Password reset for carol. They must choose a new one at next login."
+    assert carol.get("/api/v1/me").status_code == 401  # her sessions were ended
+    assert _api(alice, "post", f"/api/v1/h/{hid}/leave").json()["detail"] == "You're the last admin. Make someone else an admin before leaving."
+    assert _api(alice, "post", f"/api/v1/h/{hid}/rename", json={"name": "Our place"}).json()["household"]["name"] == "Our place"
+    assert _api(alice, "post", f"/api/v1/h/{hid}/delete", json={"confirm_name": "Home"}).json()["detail"] == "Type the household name exactly to confirm deletion."
+    assert bob.get(f"/api/v1/h/{hid}/settings").status_code == 404
+    r = _api(alice, "post", f"/api/v1/h/{hid}/delete", json={"confirm_name": "Our place"})
+    assert r.status_code == 200 and r.json()["households"] == []
+
+
+def test_stores_catalog_and_recipes_match_the_website(make_user, monkeypatch):
+    from test_app import _RECIPE_PAGE
+
+    from app import importer, scan
+
+    make_user("alice").create_household()
+    alice = App("alice")
+    hid = alice.login["households"][0]["id"]
+    assert alice.login["features"] == {"scan": True}
+
+    assert _api(alice, "post", f"/api/v1/h/{hid}/stores", json={"name": "Other"}).json()["detail"] == "“Other” is reserved for items without a store."
+    costco = next(s["id"] for s in _api(alice, "post", f"/api/v1/h/{hid}/stores", json={"name": "Costco"}).json()["state"]["stores"])
+    state = _api(alice, "post", f"/api/v1/h/{hid}/stores", json={"name": "Smith's"}).json()["state"]
+    smiths = next(s["id"] for s in state["stores"] if s["name"] == "Smith's")
+    assert _api(alice, "post", f"/api/v1/h/{hid}/stores", json={"name": "costco"}).json()["detail"] == "There's already a store called Costco."
+    state = _api(alice, "post", f"/api/v1/h/{hid}/stores/reorder", json={"ids": [smiths, costco]}).json()["state"]
+    assert [s["name"] for s in state["stores"]] == ["Smith's", "Costco"]
+    state = _api(alice, "put", f"/api/v1/h/{hid}/stores/{smiths}", json={"name": "Smiths"}).json()["state"]
+    assert [s["name"] for s in state["stores"]] == ["Smiths", "Costco"]
+
+    # Catalog.
+    r = _api(alice, "post", f"/api/v1/h/{hid}/catalog", json={"name": "Eggs", "ranks": [costco, 999, smiths]})
+    eggs = r.json()["id"]
+    assert next(c for c in r.json()["state"]["catalog"] if c["id"] == eggs)["ranks"] == [costco, smiths]
+    assert _api(alice, "post", f"/api/v1/h/{hid}/catalog", json={"name": "eggs"}).json()["detail"] == "“Eggs” is already in the catalog."
+    state = _api(alice, "put", f"/api/v1/h/{hid}/catalog/{eggs}", json={"name": "Large eggs", "ranks": [smiths]}).json()["state"]
+    assert next(c for c in state["catalog"] if c["id"] == eggs) == {"id": eggs, "name": "Large eggs", "ranks": [smiths]}
+
+    # Recipes: create (new items get the ranks sent; existing ones only when changed), errors, draft, update.
+    body = {"name": "Omelet", "directions": "Whisk.\n\nCook.", "source_url": "example.com/omelet", "ingredients": [
+        {"name": "Large eggs", "amount": "3", "unit": "", "ranks": [costco]},
+        {"name": "Chives", "amount": "1", "unit": "tbsp", "ranks": [smiths]},
+    ]}
+    bad = dict(body, ingredients=[{"name": "Chives", "amount": "lots", "unit": ""}])
+    r = _api(alice, "post", f"/api/v1/h/{hid}/recipes", json=bad)
+    assert r.status_code == 400 and r.json()["errors"] == ["Couldn't read the amount for Chives: “lots ”. Use e.g. 2, 1/2, 1 1/2 or 0.75."]
+    r = _api(alice, "post", f"/api/v1/h/{hid}/recipes", json=body)
+    rid = r.json()["recipe_id"]
+    catalog = {c["name"]: c["ranks"] for c in r.json()["state"]["catalog"]}
+    assert catalog["Large eggs"] == [smiths] and catalog["Chives"] == [smiths]
+    recipe = next(x for x in r.json()["state"]["recipes"] if x["id"] == rid)
+    assert recipe["source_url"] == "https://example.com/omelet" and recipe["directions"] == "Whisk.\n\nCook."
+    draft = alice.get(f"/api/v1/h/{hid}/recipes/{rid}/draft").json()
+    assert [(i["name"], i["amount"], i["unit"]) for i in draft["ingredients"]] == [("Large eggs", "3", ""), ("Chives", "1", "tbsp")]
+    body["ingredients"][0].update(ranks=[costco], ranks_changed=True)
+    r = _api(alice, "put", f"/api/v1/h/{hid}/recipes/{rid}", json=body)
+    assert {c["name"]: c["ranks"] for c in r.json()["state"]["catalog"]}["Large eggs"] == [costco]
+    assert _api(alice, "delete", f"/api/v1/h/{hid}/catalog/{eggs}").json()["detail"] == "Can't delete: used by Omelet. Remove it from those recipes first."
+
+    # Importing: a draft to review, or only the gaps for an existing recipe.
+    monkeypatch.setattr(importer, "fetch_page", lambda url: (url, _RECIPE_PAGE))
+    monkeypatch.setattr(scan, "_ask_model", lambda prompt, images, schema: {
+        "name": "Chili", "ingredients": [{"item": "ground beef", "amount": "1", "unit": "lb"}], "directions": ["Brown it."]})
+    draft = _api(alice, "post", f"/api/v1/h/{hid}/recipes/import", json={"url": "https://www.example.com/chili"}).json()
+    assert draft["recipe_id"] is None and draft["name"] == "Best Chili & Cornbread" and draft["notice"].startswith("Read from example.com.")
+    draft = _api(alice, "post", f"/api/v1/h/{hid}/recipes/scan", data={"recipe_id": str(rid)},
+                 files=[("photos", ("card.jpg", _jpeg(), "image/jpeg"))]).json()
+    assert draft["recipe_id"] == rid and draft["notice"] == "Added 1 ingredient from your photo. Check them, then save."
+    assert draft["ingredients"][-1] == {"name": "Ground beef", "amount": "1", "unit": "lb", "ranks": [], "fresh": "Added"}
+    assert draft["fresh"] == {"directions": False, "link": False}  # it already had both
+    monkeypatch.setattr(scan, "_ask_model", lambda prompt, images, schema: {"name": "", "ingredients": [], "directions": ["Other."]})
+    r = _api(alice, "post", f"/api/v1/h/{hid}/recipes/scan", data={"recipe_id": str(rid)}, files=[("photos", ("c.jpg", _jpeg(), "image/jpeg"))])
+    assert r.json() == {"recipe_id": rid, "nothing_new": True, "notice": "Nothing to add from your photo. This recipe already has everything it found."}
+
+    # Copy to another household, then delete.
+    other = _api(alice, "post", "/api/v1/households", json={"name": "Cabin"}).json()["household_id"]
+    r = _api(alice, "post", f"/api/v1/h/{hid}/recipes/{rid}/copy", json={"target_household_id": other})
+    assert r.json()["household_id"] == other
+    assert [x["name"] for x in alice.get(f"/api/v1/h/{other}/state").json()["recipes"]] == ["Omelet"]
+    state = _api(alice, "delete", f"/api/v1/h/{hid}/recipes/{rid}").json()["state"]
+    assert state["recipes"] == []
+    state = _api(alice, "delete", f"/api/v1/h/{hid}/stores/{costco}").json()["state"]
+    assert [s["name"] for s in state["stores"]] == ["Smiths"]
+
+
+def _jpeg():
+    import io
+
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (50, 50), (200, 200, 200)).save(buf, "JPEG")
+    return buf.getvalue()

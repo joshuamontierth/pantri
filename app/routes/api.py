@@ -18,13 +18,14 @@ import secrets
 from datetime import timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 
-from .. import config, quantities, security, services
+from .. import actions, config, importer, quantities, scan, security, services
 from ..db import get_db
+from ..deps import form_data
 from ..events import broker
-from ..models import CatalogItem, Household, ListItem, Membership, Recipe, RecipeIngredient, Store, SyncOp, utcnow
+from ..models import CatalogItem, Household, Invite, ListItem, Membership, Recipe, RecipeIngredient, Store, SyncOp, User, utcnow
 
 router = APIRouter(prefix="/api/v1")
 
@@ -54,9 +55,13 @@ def api_session(request: Request, db: Session = Depends(get_db)):
                 raise HTTPException(403, "Invalid or missing CSRF token. Reload the page and try again.")
         if getattr(sess, "refreshed", False):
             request.state.refresh_session_token = token  # keep the browser's cookie sliding too
-    if sess.user.must_change_password:
-        raise HTTPException(403, "Choose a new password on the website first, then log in here.")
+    if sess.user.must_change_password and request.url.path not in _PASSWORD_CHANGE_ALLOWED:
+        raise HTTPException(403, "Choose a new password first.")
+    request.state.api_token = token
     return sess
+
+
+_PASSWORD_CHANGE_ALLOWED = ("/api/v1/account/password", "/api/v1/logout", "/api/v1/me")
 
 
 def api_member(household_id: int, sess=Depends(api_session), db: Session = Depends(get_db)):
@@ -64,6 +69,20 @@ def api_member(household_id: int, sess=Depends(api_session), db: Session = Depen
     if membership is None:
         raise HTTPException(404, "Household not found")
     return membership
+
+
+def api_admin(membership=Depends(api_member)):
+    if not membership.is_admin:
+        raise HTTPException(403, "Only household admins can do that.")
+    return membership
+
+
+def _act(fn, *args):
+    """Run a shared action (actions.py); a failed check comes back as JSON {"detail": message}."""
+    try:
+        return fn(*args)
+    except actions.ActionError as e:
+        raise HTTPException(e.status, e.message)
 
 
 def _households(db, user_id):
@@ -78,7 +97,16 @@ def _households(db, user_id):
 
 
 def _me(db, user):
-    return {"user": {"id": user.id, "username": user.username}, "households": _households(db, user.id)}
+    return {
+        "user": {"id": user.id, "username": user.username},
+        "must_change_password": bool(user.must_change_password),
+        "households": _households(db, user.id),
+        "invites": [
+            {"id": inv.id, "household": inv.household.name, "invited_by": inv.invited_by.username if inv.invited_by else None}
+            for inv in actions.pending_invites(db, user)
+        ],
+        "features": {"scan": scan.enabled()},  # reading recipes from photos
+    }
 
 
 @router.post("/login")
@@ -86,9 +114,21 @@ def login(body: dict = Body(...), db: Session = Depends(get_db)):
     user = security.find_user(db, str(body.get("username") or ""))
     if not security.verify_password(user, str(body.get("password") or "")):
         raise HTTPException(401, "Wrong username or password.")
-    if user.must_change_password:
-        raise HTTPException(403, "Choose a new password on the website first, then log in here.")
+    # After an admin reset, must_change_password is true and the app asks for a new one first.
     return {"token": security.create_session(db, user), **_me(db, user)}
+
+
+@router.post("/signup")
+def signup(body: dict = Body(...), db: Session = Depends(get_db)):
+    user = _act(actions.signup, db, str(body.get("username") or ""), str(body.get("password") or ""), str(body.get("confirm") or ""))
+    return {"token": security.create_session(db, user), **_me(db, user)}
+
+
+@router.post("/account/password")
+def change_password(request: Request, body: dict = Body(...), sess=Depends(api_session), db: Session = Depends(get_db)):
+    _act(actions.change_password, db, sess.user, str(body.get("current") or ""), str(body.get("password") or ""),
+         str(body.get("confirm") or ""), request.state.api_token)
+    return _me(db, db.get(User, sess.user_id))
 
 
 @router.post("/logout")
@@ -409,3 +449,281 @@ async def events(request: Request, household_id: int, membership=Depends(api_mem
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------- recipes: import, edit, delete (these need a connection) ----------
+
+def _recipe_routes():
+    from . import recipes  # (imported late: it's a sibling router module)
+
+    return recipes
+
+
+def _draft(name, rows, directions_text, source_url, notice, recipe_id=None, fresh=None):
+    """A recipe for the app's editor to show; nothing is saved until it sends it back."""
+    return {
+        "recipe_id": recipe_id,
+        "name": name,
+        "ingredients": [
+            {"name": r["name"], "amount": r["amount"], "unit": r["unit"], "ranks": r["ranks"], "fresh": r.get("fresh")}
+            for r in rows
+        ],
+        "directions": directions_text,
+        "source_url": source_url,
+        "notice": notice,
+        "fresh": fresh or {"directions": False, "link": False},
+    }
+
+
+def _get_recipe(db, household_id, recipe_id):
+    recipe = db.get(Recipe, recipe_id) if recipe_id is not None else None
+    if recipe is None or recipe.household_id != household_id:
+        raise HTTPException(404, "That recipe is gone. Someone may have deleted it.")
+    return recipe
+
+
+def _read_draft(recipes, db, household_id, recipe, data, source, catalog):
+    """Draft from what an import read: a new recipe, or (recipe given) only the gaps filled in."""
+    if recipe is None:
+        return _draft(data["name"], recipes._rows_from_import(catalog, data["ingredients"]), data.get("directions", ""),
+                      data.get("source_url", ""), f"Read from {source}. Check the ingredients and stores, then save.")
+    merged = recipes.augment(recipe, catalog, data)
+    if not merged["found"]:
+        return {"recipe_id": recipe.id, "nothing_new": True, "notice": recipes.nothing_new_notice(source)}
+    return _draft(recipe.name, merged["rows"], merged["directions"], merged["source_url"],
+                  recipes.added_notice(merged["found"], source), recipe_id=recipe.id, fresh=merged["fresh"])
+
+
+@router.post("/h/{household_id}/recipes/scan")
+def scan_recipe(household_id: int, form=Depends(form_data), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """Read a recipe from photos (field "photos", up to 4). With "recipe_id", only fill that recipe's gaps."""
+    recipes = _recipe_routes()
+    if not scan.enabled():
+        raise HTTPException(404, "Reading recipes from photos isn't set up on this server.")
+    rid = services.parse_int(form.get("recipe_id")) if form.get("recipe_id") else None
+    recipe = _get_recipe(db, household_id, rid) if rid is not None else None
+    catalog = services.catalog_items(db, household_id)
+    try:
+        photos = recipes._photo_bytes(form)
+        names = recipes._names_for_model(recipe, catalog) if recipe else [c.name for c in catalog]
+        data = scan.read_recipe(photos, names, recipe_name=recipe.name if recipe else None)
+    except scan.ScanError as e:
+        raise HTTPException(400, str(e))
+    return _read_draft(recipes, db, household_id, recipe, data, recipes._your_photos(photos), catalog)
+
+
+@router.post("/h/{household_id}/recipes/import")
+def import_recipe(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """Read a recipe from a link ({"url", "recipe_id"?})."""
+    recipes = _recipe_routes()
+    rid = services.parse_int(body.get("recipe_id")) if body.get("recipe_id") is not None else None
+    recipe = _get_recipe(db, household_id, rid) if rid is not None else None
+    catalog = services.catalog_items(db, household_id)
+    try:
+        names = recipes._names_for_model(recipe, catalog) if recipe else [c.name for c in catalog]
+        data = importer.import_link(str(body.get("url") or ""), names, recipe_name=recipe.name if recipe else None)
+    except scan.ScanError as e:
+        raise HTTPException(400, str(e))
+    return _read_draft(recipes, db, household_id, recipe, data, recipes._site(data["source_url"]) or "the link", catalog)
+
+
+@router.get("/h/{household_id}/recipes/{recipe_id}/draft")
+def recipe_draft(household_id: int, recipe_id: int, membership=Depends(api_member), db: Session = Depends(get_db)):
+    """An existing recipe in editor form (exact amounts, as typed)."""
+    recipes = _recipe_routes()
+    recipe = _get_recipe(db, household_id, recipe_id)
+    return _draft(recipe.name, recipes._rows_from_recipe(recipe), recipe.directions or "", recipe.source_url or "", None, recipe_id=recipe.id)
+
+
+def _save(household_id, recipe, body, db):
+    recipes = _recipe_routes()
+    raw_rows = []
+    for ing in body.get("ingredients") if isinstance(body.get("ingredients"), list) else []:
+        if not isinstance(ing, dict):
+            continue
+        ranks = ing.get("ranks")
+        raw_rows.append({
+            "name": str(ing.get("name") or "").strip(),
+            "amount": str(ing.get("amount") or "").strip(),
+            "unit": str(ing.get("unit") or "").strip(),
+            "ranks_text": ",".join(str(r) for r in ranks) if isinstance(ranks, list) else "",
+            # Rankings for items already in the catalog change only when the app sends them.
+            "dirty": isinstance(ranks, list) and bool(ing.get("ranks_changed")),
+        })
+    name = str(body.get("name") or "").strip()
+    directions_text, source_url, extra_errors = recipes._read_extras(
+        {"directions": str(body.get("directions") or ""), "source_url": str(body.get("source_url") or "")})
+    errors, _, parsed = recipes._validate(db, household_id, name, raw_rows)
+    errors += extra_errors
+    if errors:
+        return JSONResponse({"detail": errors[0], "errors": errors}, status_code=400)
+    recipe = recipes.save_recipe(db, household_id, recipe, name, parsed, directions_text, source_url)
+    return {"recipe_id": recipe.id, "state": household_state(db, household_id)}
+
+
+@router.post("/h/{household_id}/recipes")
+def create_recipe(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    return _save(household_id, None, body, db)
+
+
+@router.put("/h/{household_id}/recipes/{recipe_id}")
+def update_recipe(household_id: int, recipe_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    return _save(household_id, _get_recipe(db, household_id, recipe_id), body, db)
+
+
+@router.delete("/h/{household_id}/recipes/{recipe_id}")
+def delete_recipe(household_id: int, recipe_id: int, membership=Depends(api_member), db: Session = Depends(get_db)):
+    db.delete(_get_recipe(db, household_id, recipe_id))
+    db.commit()
+    broker.publish(household_id, "recipes")
+    return {"state": household_state(db, household_id)}
+
+
+# ---------- households, invites, members (same rules as the website's settings page) ----------
+
+@router.post("/households")
+def create_household(body: dict = Body(...), sess=Depends(api_session), db: Session = Depends(get_db)):
+    household = _act(actions.create_household, db, sess.user, str(body.get("name") or ""))
+    return {"household_id": household.id, **_me(db, sess.user)}
+
+
+@router.post("/invites/{invite_id}/accept")
+def accept_invite(invite_id: int, sess=Depends(api_session), db: Session = Depends(get_db)):
+    hid = _act(actions.accept_invite, db, sess.user, invite_id)
+    return {"household_id": hid, **_me(db, sess.user)}
+
+
+@router.post("/invites/{invite_id}/decline")
+def decline_invite(invite_id: int, sess=Depends(api_session), db: Session = Depends(get_db)):
+    _act(actions.decline_invite, db, sess.user, invite_id)
+    return _me(db, sess.user)
+
+
+def _settings(db, membership):
+    hid = membership.household_id
+    members = (
+        db.query(Membership).join(User, User.id == Membership.user_id)
+        .filter(Membership.household_id == hid).order_by(Membership.role, User.username_lower).all()
+    )
+    invites = db.query(Invite).filter_by(household_id=hid).order_by(Invite.created_at).all() if membership.is_admin else []
+    return {
+        "household": {"id": hid, "name": membership.household.name},
+        "role": membership.role,
+        "members": [
+            {"id": m.id, "user_id": m.user_id, "username": m.user.username, "role": m.role, "is_me": m.user_id == membership.user_id}
+            for m in members
+        ],
+        "invites": [{"id": inv.id, "username": inv.user.username} for inv in invites],
+    }
+
+
+@router.get("/h/{household_id}/settings")
+def settings(membership=Depends(api_member), db: Session = Depends(get_db)):
+    return _settings(db, membership)
+
+
+@router.post("/h/{household_id}/rename")
+def rename_household(body: dict = Body(...), membership=Depends(api_admin), db: Session = Depends(get_db)):
+    _act(actions.rename_household, db, membership, str(body.get("name") or ""))
+    return _settings(db, membership)
+
+
+@router.post("/h/{household_id}/invites")
+def invite(body: dict = Body(...), membership=Depends(api_admin), db: Session = Depends(get_db)):
+    target = _act(actions.invite, db, membership, str(body.get("username") or ""))
+    return {"notice": f"Invited {target.username}", **_settings(db, membership)}
+
+
+@router.delete("/h/{household_id}/invites/{invite_id}")
+def cancel_invite(household_id: int, invite_id: int, membership=Depends(api_admin), db: Session = Depends(get_db)):
+    _act(actions.cancel_invite, db, household_id, invite_id)
+    return _settings(db, membership)
+
+
+@router.post("/h/{household_id}/members/{member_id}/role")
+def set_role(household_id: int, member_id: int, body: dict = Body(...), membership=Depends(api_admin), db: Session = Depends(get_db)):
+    _act(actions.set_role, db, household_id, member_id, str(body.get("role") or ""))
+    return _settings(db, membership)
+
+
+@router.delete("/h/{household_id}/members/{member_id}")
+def remove_member(member_id: int, membership=Depends(api_admin), db: Session = Depends(get_db)):
+    _act(actions.remove_member, db, membership, member_id)
+    return _settings(db, membership)
+
+
+@router.post("/h/{household_id}/members/{member_id}/reset-password")
+def reset_password(member_id: int, body: dict = Body(...), membership=Depends(api_admin), db: Session = Depends(get_db)):
+    target = _act(actions.reset_password, db, membership, member_id, str(body.get("temp_password") or ""))
+    return {"notice": f"Password reset for {target.username}. They must choose a new one at next login.", **_settings(db, membership)}
+
+
+@router.post("/h/{household_id}/leave")
+def leave(membership=Depends(api_member), db: Session = Depends(get_db)):
+    user = membership.user
+    _act(actions.leave, db, membership)
+    return _me(db, user)
+
+
+@router.post("/h/{household_id}/delete")
+def delete_household(body: dict = Body(...), membership=Depends(api_admin), db: Session = Depends(get_db)):
+    user = membership.user
+    _act(actions.delete_household, db, membership, str(body.get("confirm_name") or ""))
+    return _me(db, user)
+
+
+# ---------- stores and catalog (answers carry the fresh household) ----------
+
+@router.post("/h/{household_id}/stores")
+def add_store(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    _act(actions.add_store, db, household_id, str(body.get("name") or ""))
+    return {"state": household_state(db, household_id)}
+
+
+@router.put("/h/{household_id}/stores/{store_id}")
+def rename_store(household_id: int, store_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    _act(actions.rename_store, db, household_id, store_id, str(body.get("name") or ""))
+    return {"state": household_state(db, household_id)}
+
+
+@router.post("/h/{household_id}/stores/reorder")
+def reorder_stores(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    ids = body.get("ids") if isinstance(body.get("ids"), list) else []
+    actions.reorder_stores(db, household_id, ids)
+    return {"state": household_state(db, household_id)}
+
+
+@router.delete("/h/{household_id}/stores/{store_id}")
+def delete_store(household_id: int, store_id: int, membership=Depends(api_member), db: Session = Depends(get_db)):
+    _act(actions.delete_store, db, household_id, store_id)
+    return {"state": household_state(db, household_id)}
+
+
+def _ranks(body):
+    ranks = body.get("ranks")
+    return [r for r in ranks if isinstance(r, int) and not isinstance(r, bool)] if isinstance(ranks, list) else []
+
+
+@router.post("/h/{household_id}/catalog")
+def create_catalog_item(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    item = _act(actions.create_catalog_item, db, household_id, str(body.get("name") or ""), _ranks(body))
+    return {"id": item.id, "state": household_state(db, household_id)}
+
+
+@router.put("/h/{household_id}/catalog/{item_id}")
+def update_catalog_item(household_id: int, item_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    _act(actions.update_catalog_item, db, household_id, item_id, str(body.get("name") or ""), _ranks(body))
+    return {"state": household_state(db, household_id)}
+
+
+@router.delete("/h/{household_id}/catalog/{item_id}")
+def delete_catalog_item(household_id: int, item_id: int, membership=Depends(api_member), db: Session = Depends(get_db)):
+    _act(actions.delete_catalog_item, db, household_id, item_id)
+    return {"state": household_state(db, household_id)}
+
+
+@router.post("/h/{household_id}/recipes/{recipe_id}/copy")
+def copy_recipe(recipe_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    target = services.parse_int(body.get("target_household_id"))
+    copy = _act(actions.copy_recipe, db, membership, recipe_id, target)
+    return {"household_id": copy.household_id, "recipe_id": copy.id}

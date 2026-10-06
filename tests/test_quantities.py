@@ -69,7 +69,6 @@ def test_pints_quarts_gallons():
 
 
 def test_old_gallon_units_are_upgraded(tmp_path):
-    import sqlite3
 
     from app import db, models
 

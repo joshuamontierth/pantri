@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 import re
 from urllib.parse import urlsplit
 
-from .. import directions, importer, quantities, scan, services
+from .. import actions, directions, importer, quantities, scan, services
 from ..db import get_db
 from ..deps import form_data, household_member
 from ..events import broker
@@ -150,6 +150,21 @@ def _save_ingredients(db, household_id, recipe, parsed):
     db.expire(recipe, ["ingredients"])
 
 
+def save_recipe(db, household_id, recipe, name, parsed, directions_text, source_url):
+    """Create (recipe=None) or update a recipe from validated input. Commits and tells other devices."""
+    if recipe is None:
+        recipe = Recipe(household_id=household_id, name=name)
+        db.add(recipe)
+    recipe.name = name
+    recipe.directions = directions_text or None
+    recipe.source_url = source_url or None
+    db.flush()
+    _save_ingredients(db, household_id, recipe, parsed)
+    db.commit()
+    broker.publish(household_id, "recipes")
+    return recipe
+
+
 def _recipes_page(request, db, membership, scan_error=None, status_code=200):
     recipes = db.query(Recipe).filter_by(household_id=membership.household_id).order_by(Recipe.name).all()
     return render(request, "recipes/index.html", {"recipes": recipes, "scan_error": scan_error},
@@ -277,8 +292,11 @@ def _and(parts):
     return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
 
 
-def _augmented_editor(request, db, membership, recipe, catalog, data, source):
-    """The recipe in the editor with only its gaps filled in: nothing it already has is changed."""
+def augment(recipe, catalog, data):
+    """The recipe with only its gaps filled in from an import: nothing it already has is changed.
+
+    Returns {rows, directions, source_url, fresh: {directions, link}, found: ["directions", "2 ingredients", ...]}.
+    """
     rows = _rows_from_recipe(recipe)
     by_key = {_name_key(r["name"]): r for r in rows}
     added = filled = 0
@@ -310,12 +328,26 @@ def _augmented_editor(request, db, membership, recipe, catalog, data, source):
         found.append(f"{filled} amount{'s' if filled != 1 else ''}")
     if new_link:
         found.append("the link")
-    if not found:
-        return _view(request, db, membership, recipe,
-                     notice=f"Nothing to add from {source}. This recipe already has everything it found.")
-    return _editor(request, db, membership, recipe=recipe, name=recipe.name, rows=rows, directions_text=directions_text,
-                   source_url=source_url, fresh={"directions": new_directions, "link": new_link},
-                   notice=f"Added {_and(found)} from {source}. Check them, then save.")
+    return {"rows": rows, "directions": directions_text, "source_url": source_url,
+            "fresh": {"directions": new_directions, "link": new_link}, "found": found}
+
+
+def nothing_new_notice(source):
+    return f"Nothing to add from {source}. This recipe already has everything it found."
+
+
+def added_notice(found, source):
+    return f"Added {_and(found)} from {source}. Check them, then save."
+
+
+def _augmented_editor(request, db, membership, recipe, catalog, data, source):
+    """The recipe in the editor with only its gaps filled in: nothing it already has is changed."""
+    merged = augment(recipe, catalog, data)
+    if not merged["found"]:
+        return _view(request, db, membership, recipe, notice=nothing_new_notice(source))
+    return _editor(request, db, membership, recipe=recipe, name=recipe.name, rows=merged["rows"],
+                   directions_text=merged["directions"], source_url=merged["source_url"], fresh=merged["fresh"],
+                   notice=added_notice(merged["found"], source))
 
 
 @router.post("/h/{household_id}/recipes/{recipe_id}/scan")
@@ -358,12 +390,7 @@ def create_recipe(request: Request, household_id: int, form=Depends(form_data), 
     if errors or extra_errors:
         return _editor(request, db, membership, name=name, rows=rows, directions_text=directions_text,
                        source_url=form.get("source_url", "").strip(), errors=errors + extra_errors, status_code=400)
-    recipe = Recipe(household_id=household_id, name=name, directions=directions_text or None, source_url=source_url or None)
-    db.add(recipe)
-    db.flush()
-    _save_ingredients(db, household_id, recipe, parsed)
-    db.commit()
-    broker.publish(household_id, "recipes")
+    recipe = save_recipe(db, household_id, None, name, parsed, directions_text, source_url)
     return RedirectResponse(f"/h/{household_id}/recipes/{recipe.id}", status_code=303)
 
 
@@ -412,12 +439,7 @@ def update_recipe(request: Request, household_id: int, recipe_id: int, form=Depe
     if errors or extra_errors:
         return _editor(request, db, membership, recipe=recipe, name=name, rows=rows, directions_text=directions_text,
                        source_url=form.get("source_url", "").strip(), errors=errors + extra_errors, status_code=400)
-    recipe.name = name
-    recipe.directions = directions_text or None
-    recipe.source_url = source_url or None
-    _save_ingredients(db, household_id, recipe, parsed)
-    db.commit()
-    broker.publish(household_id, "recipes")
+    save_recipe(db, household_id, recipe, name, parsed, directions_text, source_url)
     return RedirectResponse(f"/h/{household_id}/recipes/{recipe.id}", status_code=303)
 
 
@@ -434,18 +456,8 @@ def copy_recipe(
     household_id: int, recipe_id: int, target_household_id: int = Form(...),
     membership=Depends(household_member), db: Session = Depends(get_db),
 ):
-    recipe = _get_recipe(db, household_id, recipe_id)
-    target_member = db.query(Membership).filter_by(household_id=target_household_id, user_id=membership.user_id).one_or_none()
-    if target_member is None or target_household_id == household_id:
-        raise HTTPException(404, "Household not found")
-    copy = Recipe(household_id=target_household_id, name=recipe.name, directions=recipe.directions, source_url=recipe.source_url)
-    db.add(copy)
-    db.flush()
-    for ing in recipe.ingredients:
-        item = services.find_catalog_item(db, target_household_id, ing.catalog_item.name)
-        if item is None:
-            item = services.create_catalog_item(db, target_household_id, ing.catalog_item.name)
-        db.add(RecipeIngredient(recipe_id=copy.id, catalog_item_id=item.id, amount=ing.amount, unit=ing.unit, position=ing.position))
-    db.commit()
-    broker.publish(target_household_id, "recipes")
+    try:
+        copy = actions.copy_recipe(db, membership, recipe_id, target_household_id)
+    except actions.ActionError as e:
+        raise HTTPException(e.status, e.message)
     return RedirectResponse(f"/h/{target_household_id}/recipes/{copy.id}?copied=1", status_code=303)

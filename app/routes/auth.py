@@ -1,19 +1,13 @@
-import re
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from .. import config, security
+from .. import actions, config, security
 from ..db import get_db
 from ..deps import current_session, current_user
-from ..models import User
 from ..templating import render
 
 router = APIRouter()
-
-USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
-
 
 def _safe_next(next_url):
     if next_url and next_url.startswith("/") and not next_url.startswith(("//", "/\\")):
@@ -69,20 +63,10 @@ def signup(
     confirm: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    username = username.strip()
-    error = None
-    if not USERNAME_RE.match(username):
-        error = "Username must be 3–32 characters: letters, numbers, dot, dash or underscore."
-    elif security.find_user(db, username) is not None:
-        error = "That username is taken."
-    else:
-        error = security.validate_new_password(password, confirm)
-    if error:
-        return render(request, "auth/signup.html", {"username": username, "error": error}, status_code=400)
-
-    user = User(username=username, username_lower=username.lower(), password_hash=security.hash_password(password))
-    db.add(user)
-    db.commit()
+    try:
+        user = actions.signup(db, username, password, confirm)
+    except actions.ActionError as e:
+        return render(request, "auth/signup.html", {"username": username.strip(), "error": e.message}, status_code=400)
     token = security.create_session(db, user)
     response = RedirectResponse("/", status_code=303)
     security.set_session_cookie(response, token)
@@ -119,20 +103,8 @@ def change_password(
     db: Session = Depends(get_db),
 ):
     forced = user.must_change_password
-    error = None
-    # After an admin reset, the user just logged in with the temporary password.
-    if not forced and not security.verify_password(user, current):
-        error = "Current password is wrong."
-    if not error:
-        error = security.validate_new_password(password, confirm)
-    if not error and forced and security.verify_password(user, password):
-        error = "Choose a password different from the temporary one."
-    if error:
-        return render(request, "auth/password.html", {"forced": forced, "error": error}, status_code=400, db=db)
-
-    user = db.merge(user)
-    user.password_hash = security.hash_password(password)
-    user.must_change_password = False
-    db.commit()
-    security.delete_other_sessions(db, user.id, keep_token=request.cookies.get(config.SESSION_COOKIE))
+    try:
+        actions.change_password(db, user, current, password, confirm, keep_token=request.cookies.get(config.SESSION_COOKIE))
+    except actions.ActionError as e:
+        return render(request, "auth/password.html", {"forced": forced, "error": e.message}, status_code=400, db=db)
     return RedirectResponse("/account?changed=1", status_code=303)
