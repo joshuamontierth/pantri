@@ -2,7 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException
@@ -11,7 +11,7 @@ from . import config, db, security
 from .deps import LoginRequired, RedirectTo, login_url
 from .events import broker
 from .routes import api, auth, catalog, households, lists, plan, recipes, stores
-from .templating import render
+from .templating import render, templates
 
 
 @asynccontextmanager
@@ -77,6 +77,22 @@ async def _http_error(request: Request, exc: HTTPException):
         # Shown by app.js as a toast.
         return HTMLResponse(message, status_code=exc.status_code)
     return render(request, "error.html", {"message": message, "status": exc.status_code}, status_code=exc.status_code)
+
+
+# The service worker must be served from the root to look after every page (static/sw.js).
+_SW_SOURCE = (config.BASE_DIR / "static" / "sw.js").read_text()
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    body = _SW_SOURCE.replace("__VERSION__", templates.env.globals["static_v"])
+    return Response(body, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/offline", include_in_schema=False)
+def offline_page(request: Request):
+    """Shown by the service worker for a page that isn't saved on this device."""
+    return templates.TemplateResponse(request, "offline.html", {})
 
 
 @app.get("/healthz", include_in_schema=False)

@@ -17,18 +17,18 @@
   <div class="state state-done">
     <span class="state-mark">{{ icon("check", 30, 2.6) }}</span>
     <p class="state-title">Everything is in the cart</p>
-    <button type="button" class="btn primary" hx-post="/h/{{ household.id }}/lists/{{ p.key }}/clear-checked" hx-swap="none">Clear {{ n_done }} checked item{{ "s" if n_done != 1 }}</button>
+    <button type="button" class="btn primary" data-clear>Clear {{ n_done }} checked item{{ "s" if n_done != 1 }}</button>
   </div>
   {% endif %}
 
-  <ul class="items items-open" data-sortable data-reorder-url="/h/{{ household.id }}/lists/{{ p.key }}/reorder">
+  <ul class="items items-open">
     {% for item in p.unchecked %}{% include "lists/_item.html" %}{% endfor %}
   </ul>
 
   {% if n_done %}
   <div class="cart-bar">
     <span class="section-label">In cart</span>
-    {% if n_open %}<button type="button" class="linklike" hx-post="/h/{{ household.id }}/lists/{{ p.key }}/clear-checked" hx-swap="none">Clear checked</button>{% endif %}
+    {% if n_open %}<button type="button" class="linklike" data-clear>Clear checked</button>{% endif %}
   </div>
   <ul class="items items-done">
     {% for item in p.checked %}{% include "lists/_item.html" %}{% endfor %}

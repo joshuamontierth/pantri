@@ -94,6 +94,8 @@ def logout(request: Request, _sess=Depends(current_session), db: Session = Depen
     security.delete_session(db, request.cookies.get(config.SESSION_COOKIE))
     response = RedirectResponse("/login", status_code=303)
     security.clear_session_cookie(response)
+    # Forget the lists and pages saved for offline use on this device (app.js also does this on the login page).
+    response.headers["Clear-Site-Data"] = '"cache", "storage"'
     return response
 
 

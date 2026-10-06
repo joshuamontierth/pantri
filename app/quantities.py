@@ -14,6 +14,9 @@ VOLUME = {
     "tbsp": 14.78676478125,
     "fl oz": 29.5735295625,
     "cup": 236.5882365,
+    "pt": 473.176473,
+    "qt": 946.352946,
+    "gal": 3785.411784,
     "ml": 1.0,
     "l": 1000.0,
 }
@@ -27,12 +30,15 @@ WEIGHT = {
 MAX_AMOUNT = 1_000_000
 
 # Shown in unit pickers, in this order. "each" maps to the "" count unit.
-COMMON_UNITS = ["each", "tsp", "tbsp", "cup", "fl oz", "ml", "L", "oz", "lb", "g", "kg"]
+COMMON_UNITS = ["each", "tsp", "tbsp", "cup", "pt", "qt", "gal", "fl oz", "ml", "L", "oz", "lb", "g", "kg"]
 
 _ALIASES = {
     "tsp": ["tsp", "tsps", "tsp.", "teaspoon", "teaspoons"],
     "tbsp": ["tbsp", "tbsps", "tbsp.", "tbs", "tbs.", "tbl", "tablespoon", "tablespoons"],
     "cup": ["cup", "cups", "c", "c."],
+    "pt": ["pt", "pts", "pt.", "pint", "pints"],
+    "qt": ["qt", "qts", "qt.", "quart", "quarts"],
+    "gal": ["gal", "gals", "gal.", "gallon", "gallons"],
     "fl oz": ["fl oz", "fl. oz", "fl. oz.", "fl.oz", "fl.oz.", "floz", "fluid ounce", "fluid ounces"],
     "ml": ["ml", "ml.", "milliliter", "milliliters", "millilitre", "millilitres"],
     "l": ["l", "l.", "liter", "liters", "litre", "litres"],
@@ -287,3 +293,7 @@ def quantity_input_text(parts):
     return " + ".join(
         f"{amount_input_text(amount)} {unit_label(unit)}".strip() for amount, unit in parts
     )
+
+
+# Units that were free text before they became standard ones (US pints, quarts, gallons).
+LEGACY_UNITS = {"pint": "pt", "quart": "qt", "gallon": "gal"}

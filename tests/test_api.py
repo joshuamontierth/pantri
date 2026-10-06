@@ -44,8 +44,14 @@ def test_login_and_auth(make_user):
     assert phone.login["households"] == [{"id": hid, "name": "Home", "role": "admin"}]
     assert phone.get("/api/v1/me").json()["households"][0]["id"] == hid
 
-    # The website's cookie doesn't work on the API, and a bad token gets JSON, not a login page.
-    assert alice.get("/api/v1/me").status_code == 401
+    # The website's pages can use the API with their cookie, but changes need the CSRF token.
+    assert alice.get("/api/v1/me").json()["user"]["username"] == "alice"
+    r = alice.client.post(f"/api/v1/h/{hid}/ops", json={"ops": []})
+    assert r.status_code == 403 and "CSRF" in r.json()["detail"]
+    r = alice.client.post(f"/api/v1/h/{hid}/ops", json={"ops": [{"op_id": "w1", "type": "add", "name": "Tea", "store": None}]},
+                          headers={"X-CSRF-Token": alice.csrf})
+    assert r.status_code == 200 and r.json()["results"][0]["status"] == "ok"
+    # A bad token gets JSON, not a login page.
     r = c.get(f"/api/v1/h/{hid}/state", headers={"Authorization": "Bearer nope"})
     assert r.status_code == 401 and r.json()["detail"] == "Log in again."
     assert c.get(f"/api/v1/h/{hid}/events").status_code == 401
@@ -112,7 +118,7 @@ def test_offline_ops_with_refs_and_resends(make_user):
     out = phone.ops(hid, {"op_id": "op5", "type": "update", "item": "local-1", "name": "Milk", "qty": "1 gallon",
                           "note": "2%", "store": None})
     milk = next(i for i in out["state"]["items"] if i["name"] == "Milk")
-    assert (milk["qty"], milk["note"], milk["store_id"]) == ("1 gallon", "2%", None)
+    assert (milk["qty"], milk["note"], milk["store_id"]) == ("1 gal", "2%", None)
 
     # Someone deleted it on the website meanwhile: the phone's change is skipped, the rest still apply.
     alice.post(f"/h/{hid}/items/{milk['id']}/delete", htmx=True)
@@ -210,3 +216,21 @@ def test_android_app_download(make_user, tmp_path, monkeypatch):
     assert r.headers["content-type"] == "application/vnd.android.package-archive"
     # Not for strangers.
     assert TestClient(app, follow_redirects=False).get("/android/ShoppingList.apk").status_code == 303
+
+
+def test_offline_support_pieces(make_user):
+    from app.templating import templates
+
+    alice = make_user("alice")
+    hid = alice.create_household()
+    page = alice.get(f"/h/{hid}").text
+    # The lists page carries the household for lists.js, and loads it.
+    assert 'id="initial-state"' in page and "/static/js/lists.js?v=" in page and 'data-user="alice"' in page
+    sw = TestClient(app).get("/sw.js")
+    assert sw.status_code == 200 and sw.headers["content-type"].startswith("text/javascript")
+    assert templates.env.globals["static_v"] in sw.text and "__VERSION__" not in sw.text
+    off = TestClient(app).get("/offline")
+    assert off.status_code == 200 and "You're offline" in off.text
+    assert "data-anon" in TestClient(app).get("/login").text
+    r = alice.post("/logout")
+    assert r.headers["clear-site-data"] == '"cache", "storage"'

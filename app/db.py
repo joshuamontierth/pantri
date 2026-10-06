@@ -36,6 +36,10 @@ def init_engine(path=None):
 
     Base.metadata.create_all(engine)
     _add_missing_columns(engine)
+    from . import services  # noqa: E402  (imports models, which import this module)
+
+    with SessionLocal() as session:
+        services.upgrade_stored_units(session)
     return engine
 
 

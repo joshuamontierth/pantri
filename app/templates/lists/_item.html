@@ -1,7 +1,6 @@
-<li class="item{{ ' is-checked' if item.checked }}" data-id="{{ item.id }}">
+<li class="item{{ ' is-checked' if item.checked }}" data-key="s{{ item.id }}">
   {% if not item.checked %}<span class="handle" aria-hidden="true" title="Drag to reorder"></span>{% endif %}
-  <button type="button" class="item-main" data-toggle-url="/h/{{ household.id }}/items/{{ item.id }}/toggle"
-          aria-pressed="{{ 'true' if item.checked else 'false' }}" aria-label="{{ 'Uncheck' if item.checked else 'Check off' }} {{ item.name }}">
+  <button type="button" class="item-main" aria-pressed="{{ 'true' if item.checked else 'false' }}" aria-label="{{ 'Uncheck' if item.checked else 'Check off' }} {{ item.name }}">
     <span class="check" aria-hidden="true">{{ icon("check", 16, 3) }}</span>
     <span class="item-body">
       <span class="item-line">
@@ -12,5 +11,5 @@
       {% if item.recipe_tags %}<span class="item-tags">for {{ item.recipe_tags|join(", ") }}</span>{% endif %}
     </span>
   </button>
-  <button type="button" class="item-more" hx-get="/h/{{ household.id }}/items/{{ item.id }}/edit" hx-target="#sheet-body" hx-swap="innerHTML" aria-label="Edit {{ item.name }}">{{ icon("more", 22) }}</button>
+  <button type="button" class="item-more" aria-label="Edit {{ item.name }}">{{ icon("more", 22) }}</button>
 </li>

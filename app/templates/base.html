@@ -9,13 +9,17 @@
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}Shopping List{% endblock %}</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='7' fill='%233350D4'/%3E%3Cpath d='M9.5 16.5l4.5 4.5 8.5-9.5' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Shopping List">
   <link rel="preload" href="/static/fonts/SchibstedGrotesk-400-900.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/app.css?v={{ static_v }}">
   <script src="/static/vendor/htmx.min.js" defer></script>
   <script src="/static/vendor/Sortable.min.js" defer></script>
   <script src="/static/js/app.js?v={{ static_v }}" defer></script>
+  {% block scripts %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}" {% block body_attrs %}{% endblock %}>
+<body class="{% block body_class %}{% endblock %}" {% if user %}data-user="{{ user.username }}"{% else %}data-anon{% endif %} {% block body_attrs %}{% endblock %}>
   {% if user %}
   <header class="topbar">
     {% if household %}
@@ -24,6 +28,7 @@
       <a href="/h/{{ household.id }}/recipes"{% if nav == 'recipes' %} aria-current="page"{% endif %}>Recipes</a>
       <a href="/h/{{ household.id }}/catalog"{% if nav == 'catalog' %} aria-current="page"{% endif %}>Catalog</a>
     </nav>
+    <span class="sync-pill" id="sync-pill" role="status" hidden></span>
     <a class="gear" href="/h/{{ household.id }}/settings" aria-label="Settings"{% if nav == 'settings' %} aria-current="page"{% endif %}>{{ icon("gear", 22, 1.8) }}</a>
     {% else %}
     <a class="hh-link" href="/households"><span class="hh-name">Shopping List</span></a>

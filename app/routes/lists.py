@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -10,6 +11,7 @@ from ..db import get_db
 from ..deps import form_data, household_member
 from ..events import broker
 from ..models import ListItem, Store
+from ..routes.api import household_state
 from ..routes.households import LAST_HOUSEHOLD_COOKIE
 from ..templating import render
 
@@ -79,13 +81,6 @@ def _get_item(db, household_id, item_id):
 @router.get("/h/{household_id}")
 def lists_page(request: Request, household_id: int, added: int = -1, membership=Depends(household_member), db: Session = Depends(get_db)):
     stores = services.household_stores(db, household_id)
-    names = _store_names(stores)
-    catalog = services.catalog_items(db, household_id)
-    # For quick-add suggestions: each catalog item and where "Auto" would send it.
-    suggest = []
-    for c in catalog:
-        key = services.store_key(services.primary_store_id(c))
-        suggest.append({"n": c.name, "s": key, "sn": names.get(key, services.OTHER_LABEL)})
     response = render(
         request,
         "lists/index.html",
@@ -93,8 +88,8 @@ def lists_page(request: Request, household_id: int, added: int = -1, membership=
             "stores": stores,
             "panels": _all_panels(db, household_id, stores),
             "counts": services.unchecked_counts(db, household_id),
-            "catalog": catalog,
-            "suggest": suggest,
+            "state": household_state(db, household_id),
+            "generated_ms": int(time.time() * 1000),
             "added": added,
         },
         db=db,

@@ -32,6 +32,9 @@
     toastBox.appendChild(el);
   }
 
+  // Shared with lists.js.
+  window.App = { toast, buzz, csrf, clientId };
+
   if (toastBox) {
     new MutationObserver((muts) => {
       muts.forEach((m) => m.addedNodes.forEach((n) => {
@@ -73,6 +76,26 @@
       body: new URLSearchParams(pairs),
     }).then((r) => { if (!r.ok) toast("Couldn't save the new order.", true); return r; })
       .catch(() => toast("Can't reach the server.", true));
+  }
+
+  // ---------- offline ----------
+  // The service worker (/sw.js) keeps pages and assets cached so the site opens without a connection.
+  // The lists page goes further and works fully offline (lists.js).
+  if (document.body.hasAttribute("data-anon")) {
+    // Logged out: forget this account's saved lists and cached pages (shared computers).
+    try { Object.keys(localStorage).filter((k) => k.startsWith("sl:")).forEach((k) => localStorage.removeItem(k)); } catch (_) { /* blocked */ }
+    if (window.caches) caches.keys().then((keys) => keys.filter((k) => k.startsWith("pages-")).forEach((k) => caches.delete(k))).catch(() => {});
+  } else if ("serviceWorker" in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register("/sw.js").catch(() => { /* not available: online only */ });
+  }
+  // Other pages: say so when this is a saved copy because the server can't be reached.
+  const syncPill = document.getElementById("sync-pill");
+  if (syncPill && !document.body.hasAttribute("data-lists-page")) {
+    const showOffline = (off) => { syncPill.textContent = "Offline"; syncPill.hidden = !off; syncPill.classList.toggle("is-offline", off); };
+    const check = () => fetch("/healthz", { cache: "no-store" }).then((r) => showOffline(!r.ok)).catch(() => showOffline(true));
+    check();
+    window.addEventListener("online", check);
+    window.addEventListener("offline", () => showOffline(true));
   }
 
   // ---------- small helpers used on several pages ----------
@@ -406,311 +429,6 @@
   if (window.htmx) htmx.onLoad(initSortables);
   else document.addEventListener("DOMContentLoaded", () => initSortables(document.body));
 
-  // ---------- lists page ----------
-  function initListsPage() {
-    const hid = document.body.dataset.household;
-    const panels = document.getElementById("panels");
-    const tabs = document.getElementById("store-tabs");
-    const indicator = tabs.querySelector(".tab-indicator");
-    const targetInput = document.getElementById("qa-target");
-    const qaForm = document.getElementById("quick-add");
-    const qaName = qaForm.querySelector(".qa-name");
-    const qaQty = qaForm.querySelector(".qa-qty");
-    const sheet = document.getElementById("sheet");
-    const sheetBody = document.getElementById("sheet-body");
-    let activeKey = null;
-
-    const panelList = () => Array.from(panels.querySelectorAll(".panel"));
-    const tabList = () => Array.from(tabs.querySelectorAll(".tab"));
-    const panelEl = (key) => document.getElementById("panel-" + key);
-    const tabEl = (key) => tabs.querySelector('.tab[data-key="' + key + '"]');
-    const allKeys = () => panelList().map((p) => p.dataset.key);
-    const tabName = (key) => { const t = tabEl(key); return t ? t.querySelector(".tab-name").textContent : ""; };
-
-    // ----- tabs, swiping and the sliding underline -----
-    function updateIndicator() {
-      const tl = tabList();
-      if (!tl.length || !indicator) return;
-      const f = Math.max(0, Math.min(tl.length - 1, panels.scrollLeft / (panels.clientWidth || 1)));
-      const i = Math.floor(f), t = f - i;
-      const a = tl[i], b = tl[Math.min(i + 1, tl.length - 1)];
-      const left = a.offsetLeft + (b.offsetLeft - a.offsetLeft) * t;
-      const width = a.offsetWidth + (b.offsetWidth - a.offsetWidth) * t;
-      indicator.style.width = width + "px";
-      indicator.style.transform = "translateX(" + left + "px)";
-    }
-
-    // New items go to the list you're looking at; the box says which.
-    function updateTarget() {
-      const name = tabName(activeKey);
-      targetInput.value = activeKey || "none";
-      qaName.placeholder = name && name.length <= 14 ? "Add to " + name : "Add an item";
-      if (!suggestBox.hidden) renderSuggestions();
-    }
-
-    function setActive(key, opts) {
-      opts = opts || {};
-      if (!panelEl(key)) key = allKeys()[0];
-      activeKey = key;
-      tabList().forEach((t) => t.setAttribute("aria-selected", t.dataset.key === key ? "true" : "false"));
-      const t = tabEl(key);
-      if (t) tabs.scrollTo({ left: t.offsetLeft - tabs.clientWidth / 2 + t.clientWidth / 2, behavior: opts.instant ? "auto" : "smooth" });
-      if (opts.scroll) panels.scrollTo({ left: panelEl(key).offsetLeft, behavior: opts.instant ? "auto" : "smooth" });
-      history.replaceState(null, "", "#store-" + key);
-      updateTarget();
-    }
-
-    tabs.addEventListener("click", (e) => {
-      const t = e.target.closest(".tab");
-      if (t) setActive(t.dataset.key, { scroll: true });
-    });
-
-    let scrollTimer = null;
-    let rafPending = false;
-    panels.addEventListener("scroll", () => {
-      if (!rafPending) {
-        rafPending = true;
-        requestAnimationFrame(() => { rafPending = false; updateIndicator(); });
-      }
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        const p = panelList()[Math.round(panels.scrollLeft / panels.clientWidth)];
-        if (p && p.dataset.key !== activeKey) { setActive(p.dataset.key); buzz(4); }
-      }, 90);
-    }, { passive: true });
-
-    window.addEventListener("resize", () => {
-      const p = panelEl(activeKey);
-      if (p) panels.scrollLeft = p.offsetLeft;
-      updateIndicator();
-    });
-    document.addEventListener("htmx:afterSettle", updateIndicator);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateIndicator);
-
-    // ----- check off: instant feedback, then sync -----
-    panels.addEventListener("click", (e) => {
-      const btn = e.target.closest(".item-main");
-      if (!btn || btn._pending) return;
-      btn._pending = true;
-      const li = btn.closest(".item");
-      const checking = !li.classList.contains("is-checked");
-      li.classList.add(checking ? "checking" : "unchecking");
-      if (checking) buzz(12);
-      const id = li.dataset.id;
-      // Let the pen stroke land before the item moves to "In cart".
-      setTimeout(() => {
-        htmx.ajax("POST", btn.dataset.toggleUrl, { swap: "none", target: "body" }).then(() => {
-          const moved = panels.querySelector('.item[data-id="' + id + '"]');
-          if (moved && moved !== li) moved.classList.add("arrive");
-          if (li.isConnected) { li.classList.remove("checking", "unchecking"); btn._pending = false; }
-        });
-      }, checking ? 280 : 120);
-    });
-
-    // ----- edit sheet -----
-    document.addEventListener("htmx:afterSwap", (e) => {
-      if (e.detail.target === sheetBody && !sheet.open) sheet.showModal();
-    });
-    document.addEventListener("htmx:afterRequest", (e) => {
-      if (sheet.open && sheet.contains(e.detail.elt) && e.detail.successful) sheet.close();
-    });
-    sheet.addEventListener("close", () => { sheetBody.replaceChildren(); sheet.style.transform = ""; });
-    sheet.addEventListener("click", (e) => {
-      if (e.target !== sheet) return;
-      const r = sheet.getBoundingClientRect();
-      if (e.clientY < r.top || e.clientY > r.bottom || e.clientX < r.left || e.clientX > r.right) sheet.close();
-    });
-    // Drag the grabber down to dismiss.
-    let dragStart = null;
-    sheet.addEventListener("pointerdown", (e) => {
-      if (!e.target.closest(".sheet-grabber, .sheet-head")) return;
-      dragStart = e.clientY;
-      sheet.setPointerCapture(e.pointerId);
-    });
-    sheet.addEventListener("pointermove", (e) => {
-      if (dragStart === null) return;
-      sheet.style.transform = "translateY(" + Math.max(0, e.clientY - dragStart) + "px)";
-    });
-    sheet.addEventListener("pointerup", (e) => {
-      if (dragStart === null) return;
-      const dy = e.clientY - dragStart;
-      dragStart = null;
-      if (dy > 90) sheet.close();
-      else sheet.style.transform = "";
-    });
-
-    // ----- quick add with suggestions -----
-    const catalog = JSON.parse((document.getElementById("catalog-suggest") || {}).textContent || "[]");
-    const suggestBox = document.getElementById("qa-suggest");
-    let suggestions = [];
-    let activeIdx = -1;
-
-    function hideSuggestions() {
-      suggestBox.hidden = true;
-      suggestBox.replaceChildren();
-      suggestions = [];
-      activeIdx = -1;
-    }
-
-    function renderSuggestions() {
-      const q = qaName.value.trim();
-      if (!q || document.activeElement !== qaName) { hideSuggestions(); return; }
-      const ql = q.toLowerCase();
-      const starts = [], contains = [];
-      catalog.forEach((c) => {
-        const n = c.n.toLowerCase();
-        if (n.startsWith(ql)) starts.push(c);
-        else if (n.includes(ql)) contains.push(c);
-      });
-      suggestions = starts.concat(contains).slice(0, 4).map((c) => ({ name: c.n, entry: c }));
-      if (!suggestions.length) { hideSuggestions(); return; }
-      if (activeIdx >= suggestions.length) activeIdx = -1;
-
-      // Each row adds the item to this list. If the item usually comes from another store,
-      // a second button sends it there instead.
-      suggestBox.replaceChildren(...suggestions.map((s, i) => {
-        const row = document.createElement("div");
-        row.className = "sg-row" + (i === activeIdx ? " active" : "");
-        const main = document.createElement("button");
-        main.type = "button";
-        main.className = "sg-main";
-        main.dataset.index = String(i);
-        main.setAttribute("aria-label", "Add " + s.name + " to " + tabName(activeKey));
-        const at = s.name.toLowerCase().indexOf(ql);
-        const strong = document.createElement("b");
-        strong.textContent = s.name.slice(at, at + ql.length);
-        main.append(s.name.slice(0, at), strong, s.name.slice(at + ql.length));
-        row.appendChild(main);
-        if (s.entry.s !== "none" && s.entry.s !== activeKey) {
-          const alt = document.createElement("button");
-          alt.type = "button";
-          alt.className = "sg-alt";
-          alt.dataset.index = String(i);
-          alt.dataset.store = s.entry.s;
-          alt.setAttribute("aria-label", "Add " + s.name + " to " + s.entry.sn + " instead");
-          alt.insertAdjacentHTML("afterbegin", '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>');
-          alt.append(s.entry.sn);
-          row.appendChild(alt);
-        }
-        return row;
-      }));
-      suggestBox.hidden = false;
-    }
-
-    function pickSuggestion(i, storeKey) {
-      const s = suggestions[i];
-      if (!s) return;
-      qaName.value = s.name;
-      hideSuggestions();
-      if (storeKey) targetInput.value = storeKey;
-      qaForm.requestSubmit(); // htmx reads the form values right here
-      targetInput.value = activeKey || "none";
-    }
-
-    qaName.addEventListener("input", () => { activeIdx = -1; renderSuggestions(); });
-    qaName.addEventListener("focus", renderSuggestions);
-    qaName.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== qaName) hideSuggestions(); }, 120));
-    qaName.addEventListener("keydown", (e) => {
-      if (suggestBox.hidden) return;
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        const n = suggestions.length;
-        activeIdx = e.key === "ArrowDown" ? (activeIdx + 1) % n : (activeIdx - 1 + n) % n;
-        renderSuggestions();
-      } else if (e.key === "Enter" && activeIdx >= 0) {
-        e.preventDefault();
-        pickSuggestion(activeIdx);
-      } else if (e.key === "Escape") {
-        hideSuggestions();
-      }
-    });
-    // Keep the keyboard up: tapping a suggestion must not blur the input.
-    suggestBox.addEventListener("pointerdown", (e) => e.preventDefault());
-    suggestBox.addEventListener("click", (e) => {
-      const b = e.target.closest("button[data-index]");
-      if (b) pickSuggestion(Number(b.dataset.index), b.dataset.store);
-    });
-
-    qaForm.addEventListener("htmx:afterRequest", (e) => {
-      if (e.detail.elt !== qaForm || !e.detail.successful) return;
-      qaName.value = "";
-      qaQty.value = "";
-      hideSuggestions();
-      buzz(10);
-      qaName.focus();
-    });
-
-    const fromHash = (location.hash.match(/^#store-(\w+)$/) || [])[1];
-    setActive(fromHash || allKeys()[0], { scroll: true, instant: true });
-    updateIndicator();
-
-    // ----- live refresh -----
-    const pending = new Set();
-    let reloadPending = false;
-
-    function refresh(keys) {
-      if (dragging) { keys.forEach((k) => pending.add(k)); return; }
-      if (keys.length) {
-        htmx.ajax("GET", "/h/" + hid + "/lists/refresh?stores=" + encodeURIComponent(keys.join(",")), { swap: "none", target: "body" });
-      }
-    }
-    function refreshAll() { refresh(allKeys()); }
-
-    function reloadPage() {
-      if (dragging || sheet.open || document.activeElement === qaName || document.activeElement === qaQty) {
-        reloadPending = true;
-      } else {
-        location.reload();
-      }
-    }
-
-    function flushPending() {
-      if (reloadPending && !dragging && !sheet.open) { reloadPending = false; location.reload(); return; }
-      if (pending.size && !dragging) {
-        const keys = Array.from(pending);
-        pending.clear();
-        refresh(keys);
-      }
-    }
-    sheet.addEventListener("close", () => setTimeout(flushPending, 50));
-    qaName.addEventListener("blur", () => setTimeout(flushPending, 300));
-
-    let source = null;
-    let everOpened = false;
-    function connect() {
-      if (source) source.close();
-      source = new EventSource("/h/" + hid + "/events");
-      source.onopen = () => {
-        if (everOpened) refreshAll(); // reconnected: catch up on anything missed
-        everOpened = true;
-      };
-      source.onmessage = (ev) => {
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch (_) { return; }
-        if (msg.origin && msg.origin === clientId) return;
-        if (msg.kind === "lists") {
-          if (dragging) afterDrag.push(flushPending);
-          refresh(msg.stores || []);
-        } else if (msg.kind === "stores") {
-          reloadPage();
-        } else if (msg.kind === "deleted") {
-          location.href = "/households";
-        }
-      };
-    }
-    connect();
-
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) return;
-      if (!source || source.readyState === EventSource.CLOSED) {
-        everOpened = true; // the new connection's onopen refreshes everything
-        connect();
-      } else {
-        refreshAll();
-      }
-    });
-  }
-
   // ---------- recipe editor ----------
   function initRecipeEditor(form) {
     const catalog = JSON.parse(document.getElementById("catalog-data").textContent || "{}");
@@ -942,7 +660,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    if (document.body.hasAttribute("data-lists-page")) initListsPage();
     const editor = document.querySelector("[data-recipe-editor]");
     if (editor) initRecipeEditor(editor);
     const steps = document.querySelector("[data-steps]");

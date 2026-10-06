@@ -54,3 +54,40 @@ def test_format_fractions_and_metric():
     assert format_quantity([[250.4, "g"]]) == "250 g"
     assert format_quantity([[1.02, "cup"]]) == "1 cup"
     assert format_quantity([[12, ""]]) == "12"
+
+
+def test_pints_quarts_gallons():
+    from app import quantities as q
+
+    assert q.parse_part("1 gallon") == [1.0, "gal"]
+    assert q.parse_part("2 quarts") == [2.0, "qt"]
+    assert q.parse_part("1 pt") == [1.0, "pt"]
+    assert q.format_part(2, "gal") == "2 gal"
+    # A gallon of milk plus 4 cups from a recipe is 1¼ gallons.
+    assert q.format_quantity(q.combine([[1, "gal"]], [[4, "cup"]])) == "1¼ gal"
+    assert q.format_quantity(q.combine([[1, "qt"]], [[1, "pt"]])) == "1½ qt"
+
+
+def test_old_gallon_units_are_upgraded(tmp_path):
+    import sqlite3
+
+    from app import db, models
+
+    db.init_engine(tmp_path / "t.db")
+    with db.SessionLocal() as s:
+        h = models.Household(name="H")
+        s.add(h)
+        s.flush()
+        s.add(models.ListItem(household_id=h.id, name="Milk", name_lower="milk", quantities=[[1.0, "gallon"], [2.0, "cup"]]))
+        cat = models.CatalogItem(household_id=h.id, name="Cream", name_lower="cream")
+        s.add(cat)
+        s.flush()
+        r = models.Recipe(household_id=h.id, name="R")
+        s.add(r)
+        s.flush()
+        s.add(models.RecipeIngredient(recipe_id=r.id, catalog_item_id=cat.id, amount=1, unit="quart"))
+        s.commit()
+    db.init_engine(tmp_path / "t.db")  # restart
+    with db.SessionLocal() as s:
+        assert s.query(models.ListItem).one().quantities == [[1.125, "gal"]]  # now they merge
+        assert s.query(models.RecipeIngredient).one().unit == "qt"

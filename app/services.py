@@ -336,3 +336,24 @@ def delete_store(db, store):
             r.rank = i
     db.delete(store)
     db.flush()
+
+
+# ---- data upgrades ----
+
+def upgrade_stored_units(db):
+    """Rename units stored before they became standard ("gallon" -> "gal") so they merge. Safe to rerun."""
+    old = quantities.LEGACY_UNITS
+    changed = False
+    for item in db.query(ListItem).all():
+        parts = item.quantities or []
+        if any(isinstance(p, list) and len(p) == 2 and p[1] in old for p in parts):
+            fixed = []
+            for amount, unit in parts:
+                fixed = quantities.combine(fixed, [[amount, old.get(unit, unit)]])
+            item.quantities = fixed
+            changed = True
+    for ing in db.query(RecipeIngredient).filter(RecipeIngredient.unit.in_(list(old))).all():
+        ing.unit = old[ing.unit]
+        changed = True
+    if changed:
+        db.commit()

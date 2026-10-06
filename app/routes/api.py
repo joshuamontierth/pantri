@@ -6,20 +6,22 @@ at most once, so the app can safely resend a batch whose response it never got. 
 added offline are referred to by its own id ("ref") until it learns the server's id.
 
 Auth is a bearer token from POST /api/v1/login (the same sessions the website uses, so logins
-show up and expire the same way). No cookies are involved, so there's nothing to forge
-cross-site and no CSRF token.
+show up and expire the same way). The website's own pages use the session cookie instead
+(the lists page syncs through here too); then changes must carry the CSRF token, as on the
+rest of the site.
 """
 
 import asyncio
 import hashlib
 import json
+import secrets
 from datetime import timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 
-from .. import quantities, security, services
+from .. import config, quantities, security, services
 from ..db import get_db
 from ..events import broker
 from ..models import CatalogItem, Household, ListItem, Membership, Recipe, RecipeIngredient, Store, SyncOp, utcnow
@@ -38,9 +40,20 @@ def _bearer(request: Request):
 
 
 def api_session(request: Request, db: Session = Depends(get_db)):
-    sess = security.load_session(db, _bearer(request))
+    token = _bearer(request)
+    from_cookie = not token
+    if from_cookie:
+        token = request.cookies.get(config.SESSION_COOKIE, "")
+    sess = security.load_session(db, token)
     if sess is None:
         raise HTTPException(401, "Log in again.")
+    if from_cookie:
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            supplied = request.headers.get("X-CSRF-Token", "")
+            if not supplied or not secrets.compare_digest(supplied, sess.csrf_token):
+                raise HTTPException(403, "Invalid or missing CSRF token. Reload the page and try again.")
+        if getattr(sess, "refreshed", False):
+            request.state.refresh_session_token = token  # keep the browser's cookie sliding too
     if sess.user.must_change_password:
         raise HTTPException(403, "Choose a new password on the website first, then log in here.")
     return sess

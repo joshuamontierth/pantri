@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Offline · Shopping List</title>
+  <link rel="stylesheet" href="/static/css/app.css?v={{ static_v }}">
+</head>
+<body>
+  <main class="page">
+    <div class="narrow">
+      <h1 class="page-title">You're offline</h1>
+      <p class="lede">This page hasn't been saved on this device yet, and changes here need a connection.</p>
+      <p class="lede">Your lists work offline: check things off and add items, and they sync when you're back.</p>
+      <a class="btn primary" id="to-lists" href="/">Open your lists</a>
+    </div>
+  </main>
+  <script>
+    try { var last = localStorage.getItem("sl:last"); if (last) document.getElementById("to-lists").href = last; } catch (e) {}
+  </script>
+</body>
+</html>

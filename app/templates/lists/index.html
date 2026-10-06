@@ -4,6 +4,7 @@
 {% block body_class %}lists-body{% endblock %}
 {% block body_attrs %}data-household="{{ household.id }}" data-lists-page{% endblock %}
 {% block main_class %}lists-main{% endblock %}
+{% block scripts %}<script src="/static/js/lists.js?v={{ static_v }}" defer></script>{% endblock %}
 {% block content %}
 <nav class="store-tabs" id="store-tabs" aria-label="Stores">
   <div class="tabs-track" role="tablist">
@@ -29,8 +30,7 @@
 
 <div class="qa-wrap">
   <div class="suggest" id="qa-suggest" aria-label="Suggestions" hidden></div>
-  <form class="quick-add" id="quick-add" hx-post="/h/{{ household.id }}/items" hx-swap="none" autocomplete="off">
-    <input type="hidden" name="target" id="qa-target" value="none">
+  <form class="quick-add" id="quick-add" autocomplete="off">
     <input class="qa-name" name="name" placeholder="Add an item" maxlength="100" enterkeyhint="done" required aria-label="Item name" aria-autocomplete="list" aria-controls="qa-suggest">
     <input class="qa-qty" name="qty" placeholder="Qty" aria-label="Quantity, like 2 lb" enterkeyhint="done">
     <button class="qa-add" aria-label="Add item">{{ icon("plus", 22, 2.4) }}</button>
@@ -42,10 +42,9 @@
   <div id="sheet-body"></div>
 </dialog>
 
-<datalist id="catalog-names">
-  {% for c in catalog %}<option value="{{ c.name }}">{% endfor %}
-</datalist>
-<script type="application/json" id="catalog-suggest">{{ suggest|tojson }}</script>
+<datalist id="catalog-names"></datalist>
+{# The household as of now; lists.js works from it (and from its saved copy when offline). #}
+<script type="application/json" id="initial-state" data-at="{{ generated_ms }}">{{ state|tojson }}</script>
 
 {% if added >= 0 %}
 <template id="initial-toast"><div class="toast"><span>Added {{ added }} item{{ "" if added == 1 else "s" }} from recipes</span></div></template>

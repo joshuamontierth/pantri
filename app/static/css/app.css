@@ -133,6 +133,12 @@ button { font: inherit; color: inherit; }
   border-radius: 10px; color: var(--ink-2); transition: color 140ms, transform 300ms var(--ease);
 }
 .gear[aria-current="page"] { color: var(--ink); }
+/* "Offline · 2 waiting" next to the gear (lists.js, app.js) */
+.sync-pill {
+  margin-left: auto; padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--rule); background: var(--sheet); color: var(--ink-2); font-size: 13px; font-weight: 600;
+}
+.sync-pill:not([hidden]) + .gear { margin-left: 0; }
 .gear:active { transform: rotate(45deg); }
 .current-mark { color: var(--accent); }
 .menu-list a[aria-current="page"] { cursor: default; }
@@ -422,6 +428,12 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 .item.unchecking .item-name { background-size: 0% 2px; color: var(--ink); }
 .item.is-checked .item-tags, .item.is-checked .item-note { color: var(--ink-3); }
 .item.arrive { animation: arrive 360ms var(--ease); }
+/* Changed on this device but not on the server yet: a small dot on the box's corner. */
+.item.is-pending .check { position: relative; }
+.item.is-pending .check::after {
+  content: ""; position: absolute; top: -5px; right: -5px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--ink-3); box-shadow: 0 0 0 2px var(--paper);
+}
 @keyframes arrive { from { opacity: 0; transform: translateY(-8px); } }
 
 .cart-bar { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
