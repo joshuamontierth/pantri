@@ -34,6 +34,9 @@
 <div class="qa-wrap">
   <div class="suggest" id="qa-suggest" aria-label="Suggestions" hidden></div>
   <form class="quick-add" id="quick-add" autocomplete="off">
+    {% if scan_enabled() %}
+    <button type="button" class="qa-scan" form="import-photos" data-import-button aria-label="Scan a shopping list" title="Scan a shopping list">{{ icon("scan", 24, 1.9) }}</button>
+    {% endif %}
     <input class="qa-name" name="name" placeholder="Add an item" maxlength="100" enterkeyhint="done" required aria-label="Item name" aria-autocomplete="list" aria-controls="qa-suggest">
     <input class="qa-qty" name="qty" placeholder="Qty" aria-label="Quantity, like 2 lb" enterkeyhint="done">
     <button class="qa-add" aria-label="Add item">{{ icon("plus", 22, 2.4) }}</button>
@@ -44,6 +47,10 @@
   <div class="sheet-grabber" aria-hidden="true"></div>
   <div id="sheet-body"></div>
 </dialog>
+
+{% if scan_enabled() %}
+{% with import_kind="list", import_base="/h/" ~ household.id ~ "/lists", import_button=false %}{% include "recipes/_import.html" %}{% endwith %}
+{% endif %}
 
 <datalist id="catalog-names"></datalist>
 {# The household as of now; lists.js works from it (and from its saved copy when offline). #}

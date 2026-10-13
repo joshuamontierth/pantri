@@ -1,21 +1,27 @@
 {# "Import" button: a sheet offering the camera and photo library (when a model is set up) and a recipe link.
    Include once per page. On a recipe's page it adds details to that recipe instead:
-   {% with import_base=<recipe url>, import_label=..., import_title=..., import_hint=..., import_small=false %} #}
+   {% with import_base=<recipe url>, import_label=..., import_title=..., import_hint=..., import_small=false %}
+   On the lists page it reads a shopping list (photos, or the list pasted in) and opens it for review:
+   {% with import_kind="list", import_base="/h/<id>/lists", import_button=false %}; the page's own button
+   opens it with form="import-photos" data-import-button. #}
 {% set photos_ok = scan_enabled() %}
+{% set is_list = import_kind is defined and import_kind == "list" %}
 {% set base = import_base or "/h/" ~ household.id ~ "/recipes" %}
 <form method="post" action="{{ base }}/scan" enctype="multipart/form-data" class="scan-form" id="import-photos" data-scan-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <button type="button" class="btn{{ ' small' if import_small is not defined or import_small }}" data-import-button>{{ icon("import", 18) }}{{ import_label or "Import" }}</button>
+  {% if import_button is not defined or import_button %}
+  <button type="button" class="btn{{ ' small' if import_small is not defined or import_small }}" data-import-button>{{ icon("scan" if is_list else "import", 18) }}{{ import_label or "Import" }}</button>
+  {% endif %}
   {% if photos_ok %}<input type="file" id="scan-library" name="photos" accept="image/*" multiple hidden data-scan-input data-scan-library>{% endif %}
   <dialog class="sheet scan-sheet" aria-labelledby="import-sheet-title">
     <div class="sheet-grabber" aria-hidden="true"></div>
-    <h2 class="sheet-title" id="import-sheet-title">{{ import_title or "Import a recipe" }}</h2>
+    <h2 class="sheet-title" id="import-sheet-title">{{ import_title or ("Scan a shopping list" if is_list else "Import a recipe") }}</h2>
     {% if import_hint %}<p class="field-hint">{{ import_hint }}</p>{% endif %}
     {% if photos_ok %}
     <div class="choices" data-import-choices>
       <label class="choice" data-take-photo>
         <span class="choice-icon">{{ icon("camera", 22) }}</span>
-        <span class="choice-text"><strong>Take a photo</strong><span>A recipe card or cookbook page</span></span>
+        <span class="choice-text"><strong>Take a photo</strong><span>{{ "A handwritten or printed list" if is_list else "A recipe card or cookbook page" }}</span></span>
         <input type="file" name="photos" accept="image/*" capture="environment" hidden data-scan-input>
       </label>
       <label class="choice" for="scan-library">
@@ -23,11 +29,29 @@
         <span class="choice-text"><strong>Choose photos</strong><span>Up to {{ MAX_PHOTOS }}, screenshots work too</span></span>
       </label>
       <button type="button" class="choice" data-link-choice>
+        {% if is_list %}
+        <span class="choice-icon">{{ icon("paste", 22) }}</span>
+        <span class="choice-text"><strong>Paste a list</strong><span>Typed in a note or a message</span></span>
+        {% else %}
         <span class="choice-icon">{{ icon("link", 22) }}</span>
         <span class="choice-text"><strong>Paste a link</strong><span>From a recipe website</span></span>
+        {% endif %}
       </button>
     </div>
     {% endif %}
+    {% if is_list %}
+    <div class="link-step" data-link-step hidden>
+      <label class="field">
+        <span class="field-label">Your list</span>
+        <textarea name="text" form="link-import" rows="6" maxlength="6000" required data-link-input
+                  placeholder="Milk&#10;Eggs x2&#10;2 lb ground beef"></textarea>
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn" data-link-paste hidden>Paste</button>
+        <button class="btn primary grow" form="link-import">Read list</button>
+      </div>
+    </div>
+    {% else %}
     <div class="link-step" data-link-step {{ 'hidden' if photos_ok }}>
       <label class="field">
         <span class="field-label">Recipe link</span>
@@ -39,11 +63,13 @@
       </label>
       <button class="btn primary block" form="link-import">Import</button>
     </div>
+    {% endif %}
     <button type="button" class="btn block" data-scan-cancel>Cancel</button>
   </dialog>
 
   {% if photos_ok %}
-  <dialog class="camera" data-camera aria-label="Camera">
+  <dialog class="camera" data-camera aria-label="Camera" data-read-label="{{ 'Read list' if is_list else 'Read recipe' }}"
+          data-view-hint="{{ 'Get the list in view' if is_list else 'Get the ingredients in view' }}">
     <video playsinline muted autoplay></video>
     <div class="camera-flash" aria-hidden="true"></div>
     <div class="camera-top">
@@ -58,18 +84,18 @@
     <div class="camera-bottom">
       <div class="camera-shots" data-camera-shots></div>
       <button type="button" class="shutter" data-camera-shutter aria-label="Take photo" disabled></button>
-      <button type="button" class="btn camera-done" data-camera-done disabled>Read recipe</button>
+      <button type="button" class="btn camera-done" data-camera-done disabled>{{ "Read list" if is_list else "Read recipe" }}</button>
     </div>
   </dialog>
   {% endif %}
 </form>
-<form method="post" action="{{ base }}/import" id="link-import" data-link-form hidden>
+<form method="post" action="{{ base }}/{{ 'scan' if is_list else 'import' }}" id="link-import" data-link-form hidden>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 </form>
 <div class="scan-overlay" role="status" aria-live="polite" hidden>
   <div class="scan-card">
     <span class="spinner" aria-hidden="true"></span>
-    <p class="state-title">Reading the recipe</p>
+    <p class="state-title">{{ "Reading the list" if is_list else "Reading the recipe" }}</p>
     <p class="state-text">This usually takes a few seconds.</p>
   </div>
 </div>

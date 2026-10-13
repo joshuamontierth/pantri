@@ -113,7 +113,7 @@
     });
   });
 
-  // ---------- import a recipe (photos or a link) ----------
+  // ---------- import a recipe (photos or a link), or scan a shopping list (photos or pasted text) ----------
   const MAX_SHOTS = 4;
   // A live camera view needs HTTPS (or localhost). Over plain http, "Take a photo" opens the phone's camera app.
   const liveCamera = !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -181,10 +181,10 @@
         return b;
       }));
       done.disabled = shots.length === 0;
-      done.textContent = shots.length > 1 ? "Read " + shots.length + " photos" : "Read recipe";
+      done.textContent = shots.length > 1 ? "Read " + shots.length + " photos" : dialog.dataset.readLabel;
       shutter.disabled = !stream || shots.length >= MAX_SHOTS;
       hint.textContent = shots.length >= MAX_SHOTS ? MAX_SHOTS + " photos is the most" :
-        shots.length ? "Add another photo, or tap Read" : "Get the ingredients in view";
+        shots.length ? "Add another photo, or tap Read" : dialog.dataset.viewHint;
     }
 
     function stop() {
@@ -289,6 +289,10 @@
   document.addEventListener("click", (e) => {
     const button = e.target.closest("[data-import-button]");
     if (button) {
+      if (!navigator.onLine) {
+        toast("Reading " + (button.form.action.includes("/lists/") ? "a list" : "a recipe") + " needs a connection.", true);
+        return;
+      }
       const sheet = button.form.querySelector(".scan-sheet");
       const takePhoto = sheet.querySelector("[data-take-photo]");
       if (takePhoto) takePhoto.hidden = !offerCamera;

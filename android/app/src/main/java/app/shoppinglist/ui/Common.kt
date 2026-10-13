@@ -127,6 +127,7 @@ fun Field(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     singleLine: Boolean = true,
+    minLines: Int = 1,
     textStyle: TextStyle = TextStyle(fontSize = 16.sp),
 ) {
     Column(modifier) {
@@ -142,6 +143,7 @@ fun Field(
             keyboardActions = keyboardActions,
             visualTransformation = visualTransformation,
             singleLine = singleLine,
+            minLines = minLines,
             textStyle = textStyle.copy(color = colors.ink, fontFamily = Grotesk),
             shape = RadiusShape,
             colors = OutlinedTextFieldDefaults.colors(

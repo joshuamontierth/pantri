@@ -579,6 +579,43 @@ def delete_recipe(household_id: int, recipe_id: int, membership=Depends(api_memb
     return {"state": household_state(db, household_id)}
 
 
+# ---------- adding from a photo of a shopping list, or one pasted in (these need a connection) ----------
+
+@router.post("/h/{household_id}/lists/scan")
+def scan_list(household_id: int, form=Depends(form_data), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """Read a shopping list from photos (field "photos", up to 4) or pasted "text". Nothing is added yet.
+
+    Returns {"notice", "items": [{name, qty, read_as, catalog_id, ranks, store, on_list}]} to check.
+    """
+    recipes = _recipe_routes()
+    if not scan.enabled():
+        raise HTTPException(404, "Reading lists isn't set up on this server.")
+    catalog = services.catalog_items(db, household_id)
+    try:
+        photos = recipes._photo_bytes(form)
+        found = scan.read_shopping_list(photos, str(form.get("text") or ""), [c.name for c in catalog])
+    except scan.ScanError as e:
+        raise HTTPException(400, str(e))
+    rows = actions.scanned_list(db, household_id, found)
+    return {"notice": actions.scanned_notice(rows, recipes._your_photos(photos) if photos else "your list"), "items": rows}
+
+
+def _store_id(value):
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+@router.post("/h/{household_id}/lists/add")
+def add_scanned(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """Add what was kept from a scanned list: {"items": [{"name", "qty", "store"}], "save_new": bool}."""
+    items = body.get("items") if isinstance(body.get("items"), list) else []
+    rows = [
+        {"name": str(i.get("name") or ""), "qty": str(i.get("qty") or ""), "store": _store_id(i.get("store"))}
+        for i in items[:MAX_OPS] if isinstance(i, dict)
+    ]
+    added, store_id = _act(actions.add_scanned, db, household_id, rows, bool(body.get("save_new")))
+    return {"added": added, "store_id": store_id, "state": household_state(db, household_id)}
+
+
 # ---------- households, invites, members (same rules as the website's settings page) ----------
 
 @router.post("/households")

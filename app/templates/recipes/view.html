@@ -52,8 +52,7 @@
   {% else %}
   <h2 class="section-label">Directions</h2>
   <div class="dir-empty">
-    <p>No directions yet. Add them from a photo of the recipe or a link to it.</p>
-    <button type="button" class="btn small" form="import-photos" data-import-button>{{ icon("import", 18) }}Add directions</button>
+    <p>No directions yet. Use Add details to read them from {{ "a photo of the recipe or " if scan_enabled() }}a link to it.</p>
   </div>
   {% endif %}
 

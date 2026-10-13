@@ -3,16 +3,17 @@ import json
 import time
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from .. import quantities, services
+from .. import actions, quantities, scan, services
 from ..db import get_db
 from ..deps import form_data, household_member
 from ..events import broker
 from ..models import ListItem, Store
 from ..routes.api import household_state
 from ..routes.households import LAST_HOUSEHOLD_COOKIE
+from ..routes.recipes import _photo_bytes, _your_photos
 from ..templating import render
 
 router = APIRouter()
@@ -293,6 +294,74 @@ def reorder(request: Request, household_id: int, key: str, form=Depends(form_dat
     db.commit()
     _publish(request, household_id, [key])
     return HTMLResponse("")
+
+
+# ---------- adding from a photo of a shopping list, or one pasted in (needs a connection) ----------
+
+def _scan_page(request, db, membership, rows=None, notice=None, error=None, save_new=True, status_code=200):
+    hid = membership.household_id
+    catalog = services.catalog_items(db, hid)
+    return render(
+        request,
+        "lists/scan.html",
+        {
+            "rows": rows or [],
+            "notice": notice,
+            "error": error,
+            "save_new": save_new,
+            "stores": services.household_stores(db, hid),
+            "catalog_names": [c.name for c in catalog],
+            "catalog_json": {c.name_lower: {"name": c.name, "ranks": c.ranked_store_ids} for c in catalog},
+        },
+        db=db,
+        membership=membership,
+        status_code=status_code,
+    )
+
+
+@router.post("/h/{household_id}/lists/scan")
+def scan_list(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
+    """Read a shopping list from photos (or pasted text) and show what to add, with stores. Nothing is added yet."""
+    if not scan.enabled():
+        raise HTTPException(404, "Reading lists isn't set up on this server.")
+    catalog = services.catalog_items(db, household_id)
+    try:
+        photos = _photo_bytes(form)
+        found = scan.read_shopping_list(photos, form.get("text", ""), [c.name for c in catalog])
+    except scan.ScanError as e:
+        return _scan_page(request, db, membership, error=str(e), status_code=400)
+    rows = actions.scanned_list(db, household_id, found)
+    return _scan_page(request, db, membership, rows, notice=actions.scanned_notice(rows, _your_photos(photos) if photos else "your list"))
+
+
+def _scan_rows_from_form(db, household_id, form):
+    """The review page as it was sent back, for showing it again with an error."""
+    stores = {s.id for s in services.household_stores(db, household_id)}
+    match = services.catalog_matcher(services.catalog_items(db, household_id))
+    picked = set(form.getlist("pick"))
+    rows = []
+    for i in range(min(services.parse_int(form.get("count")) or 0, 500)):
+        name = form.get(f"name_{i}", "").strip()
+        known = match(name) if name else None
+        ok, sid = services.parse_store_key(db, household_id, form.get(f"store_{i}"))
+        rows.append({
+            "name": name, "qty": form.get(f"qty_{i}", "").strip(), "read_as": "", "on_list": [],
+            "catalog_id": known.id if known else None,
+            "ranks": [r for r in (known.ranked_store_ids if known else []) if r in stores],
+            "store": sid if ok else None, "on": str(i) in picked,
+        })
+    return rows
+
+
+@router.post("/h/{household_id}/lists/scan/add")
+def add_scanned(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
+    rows = _scan_rows_from_form(db, household_id, form)
+    save_new = form.get("save_new") == "1"
+    try:
+        _, store_id = actions.add_scanned(db, household_id, [r for r in rows if r["on"]], save_new)
+    except actions.ActionError as e:
+        return _scan_page(request, db, membership, rows, error=e.message, save_new=save_new, status_code=e.status)
+    return RedirectResponse(f"/h/{household_id}#store-{services.store_key(store_id)}", status_code=303)
 
 
 @router.get("/h/{household_id}/events")

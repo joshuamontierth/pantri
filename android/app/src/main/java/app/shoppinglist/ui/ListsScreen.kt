@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.shoppinglist.data.Connection
 import app.shoppinglist.data.LocalItem
 import app.shoppinglist.data.LocalView
 import app.shoppinglist.data.SyncStatus
@@ -85,6 +86,7 @@ fun ListsScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackbar:
     LaunchedEffect(pager.currentPage) { vm.setListPage(pager.currentPage) }
     val currentStore = listIds.getOrNull(pager.currentPage)
     var editing by remember { mutableStateOf<LocalItem?>(null) }
+    var scanning by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -96,7 +98,13 @@ fun ListsScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackbar:
                 StoreTabs(view, pager)
             }
         },
-        bottomBar = { QuickAdd(vm, view, currentStore) },
+        bottomBar = {
+            // Scan a shopping list: like the website, only with the reader set up, and it needs a connection.
+            val onScan = if (!vm.scanEnabled) null else {
+                { if (status.connection == Connection.Offline) vm.message("Reading a list needs a connection.") else scanning = true }
+            }
+            QuickAdd(vm, view, currentStore, onScan)
+        },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         PullToRefreshBox(
@@ -121,6 +129,7 @@ fun ListsScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackbar:
         val item = view.items.firstOrNull { it.uiKey == started.uiKey } ?: started
         EditSheet(vm, view, item, onDismiss = { editing = null })
     }
+    if (scanning) ScanListSheet(vm, onDismiss = { scanning = false })
 }
 
 @Composable
@@ -301,7 +310,7 @@ fun EmptyState(title: String, text: String) {
 }
 
 @Composable
-private fun QuickAdd(vm: AppViewModel, view: LocalView, storeId: Long?) {
+private fun QuickAdd(vm: AppViewModel, view: LocalView, storeId: Long?, onScan: (() -> Unit)?) {
     var name by rememberSaveable { mutableStateOf("") }
     var qty by rememberSaveable { mutableStateOf("") }
     val typed = name.trim()
@@ -338,6 +347,17 @@ private fun QuickAdd(vm: AppViewModel, view: LocalView, storeId: Long?) {
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Out of the way while typing, as on the website.
+            if (onScan != null && typed.isEmpty()) {
+                Box(
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(colors.field)
+                        .border(1.dp, colors.rule2, RoundedCornerShape(12.dp)).clickable(onClick = onScan),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.Scan, "Scan a shopping list", tint = colors.ink)
+                }
+                Spacer(Modifier.width(8.dp))
+            }
             InlineField(
                 value = name, onValueChange = { name = it }, placeholder = "Add to ${view.storeName(storeId)}",
                 modifier = Modifier.weight(1f),

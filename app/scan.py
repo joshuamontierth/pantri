@@ -1,19 +1,21 @@
-"""Read a recipe from photos (or from a web page's text) using a model served by Ollama."""
+"""Read a recipe or a shopping list from photos (or from text) using a model served by Ollama."""
 
 import base64
 import io
 import json
+import re
 import urllib.error
 import urllib.request
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from . import config, directions
+from . import config, directions, quantities
 
 MAX_PHOTOS = 4
 MAX_PHOTO_BYTES = 25 * 1024 * 1024
 Image.MAX_IMAGE_PIXELS = 60_000_000  # phone photos are ~12-50 MP; refuse anything absurd
 _MAX_PAGE_TEXT = 12_000
+MAX_LIST_TEXT = 6_000
 
 _INGREDIENTS_SCHEMA = {
     "type": "array",
@@ -39,6 +41,7 @@ _RECIPE_SCHEMA = {
     "required": ["name", "ingredients", "directions"],
 }
 _LINES_SCHEMA = {"type": "object", "properties": {"ingredients": _INGREDIENTS_SCHEMA}, "required": ["ingredients"]}
+_LIST_SCHEMA = {"type": "object", "properties": {"items": _INGREDIENTS_SCHEMA}, "required": ["items"]}
 
 _INGREDIENT_RULES = """- ingredients: one entry per ingredient, in order.
   - line: the ingredient's line exactly as written, before you split it up.
@@ -74,6 +77,26 @@ like ads, comments, reviews and other recipes.
 _LINES_PROMPT = """Below are the ingredient lines of a recipe, one per line. Turn them into shopping list entries.
 """ + _INGREDIENT_RULES
 
+_LIST_RULES = """- items: one entry per thing to buy, in the order written.
+  - line: the line exactly as written, before you split it up.
+  - item: what to buy, in plain words, with the spelling fixed and abbreviations written out (OJ is Orange juice). \
+Keep words that pick a kind, like 2% milk, whole wheat bread or Greek yogurt.
+  - amount: how many or how much, exactly as written, like 2, 1/2 or 1 1/2. "x2" or "(2)" after an item is 2. \
+For a range like 4-5 use the larger number. Empty if there is no amount.
+  - unit: like lb, oz, gal, bag, box, can, bunch, pack or dozen. Empty for a plain count like 6 apples. \
+Never put a number in the unit.
+  - Two things on one line, like "salt & pepper", are two entries.
+  - Leave out anything crossed out or checked off, headings (like a store's name or "Produce"), dates, and notes \
+that aren't something to buy.
+"""
+
+_LIST_PHOTO_PROMPT = """These photos show a shopping list: handwritten, printed, or a screenshot of a note or a message. \
+Several photos can be parts of the same list, so combine them.
+""" + _LIST_RULES
+
+_LIST_TEXT_PROMPT = """Below is a shopping list someone typed or pasted. Turn it into shopping list entries.
+""" + _LIST_RULES
+
 
 class ScanError(Exception):
     """Something the user should see, worded for them."""
@@ -98,9 +121,9 @@ def prepare_photo(data):
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _with_catalog(prompt, catalog_names):
+def _with_catalog(prompt, catalog_names, noun="ingredient"):
     if catalog_names:
-        prompt += ("- If an ingredient is the same product as one of these existing items, just worded differently, "
+        prompt += (f"- If an {noun} is the same product as one of these existing items, just worded differently, "
                    "use that exact name. Keep different kinds apart (cake flour is not Flour, smoked paprika is not "
                    "Paprika): " + ", ".join(catalog_names[:400]) + ".\n")
     return prompt
@@ -114,7 +137,7 @@ def _with_name(prompt, recipe_name):
     return prompt
 
 
-def _ask_model(prompt, images, schema):
+def _ask_model(prompt, images, schema, reader="recipe reader"):
     message = {"role": "user", "content": prompt}
     if images:
         message["images"] = images
@@ -135,21 +158,21 @@ def _ask_model(prompt, images, schema):
         with urllib.request.urlopen(req, timeout=config.OLLAMA_TIMEOUT) as resp:
             payload = json.load(resp)
     except urllib.error.HTTPError as e:
-        raise ScanError(f"The recipe reader returned an error ({e.code}). Try again in a minute.")
+        raise ScanError(f"The {reader} returned an error ({e.code}). Try again in a minute.")
     except (urllib.error.URLError, TimeoutError, OSError):
-        raise ScanError("Couldn't reach the recipe reader. Check that this server can reach the model server (OLLAMA_URL).")
+        raise ScanError(f"Couldn't reach the {reader}. Check that this server can reach the model server (OLLAMA_URL).")
     try:
         data = json.loads(payload["message"]["content"])
     except (KeyError, TypeError, ValueError):
         data = None
     if not isinstance(data, dict):
-        raise ScanError("The recipe reader's answer didn't make sense. Try again.")
+        raise ScanError(f"The {reader}'s answer didn't make sense. Try again.")
     return data
 
 
-def _ingredients(data):
+def _ingredients(data, key="ingredients"):
     out = []
-    for ing in data.get("ingredients") or []:
+    for ing in data.get(key) or []:
         if not isinstance(ing, dict):
             continue
         item = str(ing.get("item") or "").strip()[:100]
@@ -158,8 +181,39 @@ def _ingredients(data):
                 "item": item,
                 "amount": str(ing.get("amount") or "").strip()[:30],
                 "unit": str(ing.get("unit") or "").strip()[:30],
+                "line": str(ing.get("line") or "").strip()[:200],
             })
     return out
+
+
+# Seasoning-sized measures don't belong on a shopping list; these become a blank amount.
+_VAGUE_RE = re.compile(r"\b(pinch|pinches|dash|dashes|smidgen|splash|sprinkle|drizzle|to taste|as needed|as desired|optional)\b", re.I)
+
+
+def clean_amount(amount_text, unit_text):
+    """Tidy what the model read ("1-2", "Tbsp.", "cloves") into (amount, unit) text an editor accepts, or blanks."""
+    amount_text, unit_text = amount_text.strip(), unit_text.strip()
+    if _VAGUE_RE.search(amount_text) or _VAGUE_RE.search(unit_text):
+        return "", ""
+    # A package size that ended up in the unit: "4" + "4 ounce" is 4, "1" + "16 ounce package" is 1 package.
+    unit_text = re.sub(r"^\(?\s*[\d./]+\s*-?\s*[a-z]+\.?\s*\)?\s*", "", unit_text, flags=re.I) if amount_text else unit_text
+    rng = re.match(r"^(.+?)\s*(?:-|–|to)\s*(.+)$", amount_text)
+    if rng:
+        amount_text = rng.group(2)  # ranges: buy enough for the larger amount
+    if not amount_text:
+        return "", ""
+    try:
+        value = quantities.parse_amount(amount_text)
+        unit = quantities.normalize_unit(unit_text)
+    except ValueError:
+        try:
+            # e.g. amount "2 cups" with the unit folded in
+            value, unit = quantities.parse_part(f"{amount_text} {unit_text}")
+        except ValueError:
+            return "", ""  # "some", "a few": leave it blank so the recipe still saves
+    if not value or value <= 0:
+        return "", ""
+    return quantities.amount_input_text(value), quantities.unit_label(unit)
 
 
 def _recipe(data, missing_message, partial=False):
@@ -200,3 +254,24 @@ def read_ingredient_lines(lines, catalog_names):
     """Turn lines like "2 cups chopped onion" into [{"item", "amount", "unit"}]."""
     prompt = _with_catalog(_LINES_PROMPT, catalog_names) + "\nIngredient lines:\n" + "\n".join(lines)
     return _ingredients(_ask_model(prompt, None, _LINES_SCHEMA))
+
+
+def read_shopping_list(photo_bytes, text, catalog_names):
+    """[{"item", "amount", "unit", "line"}] read from photos of a shopping list, or from its typed text."""
+    if photo_bytes:
+        images = [prepare_photo(b) for b in photo_bytes[:MAX_PHOTOS]]
+        prompt = _with_catalog(_LIST_PHOTO_PROMPT, catalog_names, "item")
+        missing = "I couldn't find a shopping list in that photo. Try a closer, sharper shot."
+    else:
+        text = (text or "").strip()
+        if not text:
+            raise ScanError("Take or choose a photo of your list, or paste it in.")
+        if len(text) > MAX_LIST_TEXT:
+            raise ScanError(f"That list is too long. Paste up to {MAX_LIST_TEXT:,} characters at a time.")
+        images = None
+        prompt = _with_catalog(_LIST_TEXT_PROMPT, catalog_names, "item") + "\nList:\n" + text
+        missing = "I couldn't find anything to buy in that list."
+    items = _ingredients(_ask_model(prompt, images, _LIST_SCHEMA, reader="list reader"), key="items")
+    if not items:
+        raise ScanError(missing)
+    return items

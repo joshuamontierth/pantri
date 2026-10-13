@@ -464,6 +464,14 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
   background: var(--primary); color: var(--primary-ink); transition: transform 120ms var(--ease);
 }
 .qa-add:active { transform: scale(0.92); }
+/* Scan a shopping list; out of the way while typing. */
+.qa-scan {
+  flex: none; width: 52px; display: grid; place-content: center; cursor: pointer;
+  border: 1px solid var(--rule-2); border-radius: 12px; background: var(--field); color: var(--ink);
+  transition: transform 120ms var(--ease);
+}
+.qa-scan:active { transform: scale(0.92); }
+.quick-add:has(.qa-name:not(:placeholder-shown)) .qa-scan { display: none; }
 
 .suggest {
   position: absolute; left: 12px; right: 12px; bottom: calc(100% + 8px); z-index: 30;
@@ -706,6 +714,24 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 @media (min-width: 560px) {
   .pick-row { display: grid; grid-template-columns: minmax(0, 1fr) 210px; align-items: start; gap: 14px; }
   .pick-store { margin-left: 0; }
+}
+
+/* ---------- adding from a scanned shopping list ---------- */
+.scan-main { display: flex; gap: 14px; align-items: flex-start; }
+.scan-main .box { margin-top: 13px; }
+.scan-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.scan-line { display: flex; gap: 8px; }
+.scan-name { flex: 1; min-width: 0; font-weight: 600; }
+.scan-qty { flex: none; width: 92px; }
+.scan-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; }
+.scan-meta:not(:has(> :not([hidden]))) { display: none; }
+.read-as { color: var(--ink-2); }
+.scan-row:not(.on) .scan-fields input { color: var(--ink-2); }
+.save-new { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0 2px; cursor: pointer; }
+.save-new > span { display: flex; flex-direction: column; gap: 2px; }
+.save-new > span > span { font-size: 14px; color: var(--ink-2); }
+@media (min-width: 560px) {
+  .scan-row .pick-store { margin-top: 2px; }
 }
 
 .sticky-actions {

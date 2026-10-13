@@ -13,6 +13,7 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Works offline:** the lists page and adding recipes to lists keep working without a connection and sync when it's back; other pages open as last seen. See [Offline (website)](#offline-website).
 - **Android app:** works offline (in a store with no signal, say) and syncs when it can reach the server, with live updates while it's open. See [Android app](#android-app).
 - **Add details to a recipe:** on a recipe you already have, **Add details** reads a photo or link and fills in only what's missing, like directions. See [Adding details](#adding-details-to-an-existing-recipe).
+- **Scan a shopping list:** the scan button beside "Add an item" reads a handwritten or printed list, a screenshot, or a list you paste in. Things in your catalog are matched and start at their usual store; new things can join the catalog. You check it all before anything is added. See [Scanning a shopping list](#scanning-a-shopping-list).
 
 ## Run it (Docker)
 
@@ -99,7 +100,7 @@ The photos can be different parts of one recipe, like the ingredients on one pag
 
 ### Adding details to an existing recipe
 
-On a recipe's page, tap **Add details** (or **Add directions** when it has none) and use a photo or a link the same way. The editor opens with only the gaps filled in:
+On a recipe's page, tap **Add details** and use a photo or a link the same way. The editor opens with only the gaps filled in:
 
 - directions, if the recipe has none;
 - ingredients it doesn't have yet (matched by name, so "avocado" and "Avocados" are the same);
@@ -107,6 +108,18 @@ On a recipe's page, tap **Add details** (or **Add directions** when it has none)
 - the recipe link, if it has none.
 
 Nothing it already has is changed: the name, existing amounts and existing directions stay as they are. Filled-in parts are marked **Added** or **Amount added**, and nothing is saved until you press **Save**. A photo of just the directions works here. If there's nothing new, the recipe page says so.
+
+## Scanning a shopping list
+
+On the lists page, tap the scan button at the left of "Add an item" (it hides while you type). Take a photo of the list, choose photos (up to 4, screenshots work), or paste a list typed in a note or a message. After a few seconds, **Add from your list** shows what was read, one row per item:
+
+- **Matched to your catalog** where it can be: the catalog's name is used ("bananas" finds Banana, "OJ" finds Orange juice), and the store starts at its 1st store. Something not in the catalog that's already on one of your lists starts at that list.
+- **New** marks things that aren't in the catalog. Pick a store for each; with **Save new items to the catalog** on (the default), they're saved at that store so they go there next time.
+- **Written "…"** shows how a line was written when the name doesn't (an abbreviation or a misspelling), and **Already on …** shows what's on your lists now.
+- Fix any name or amount in place. A changed name is matched to the catalog again, and its store follows unless you picked one yourself.
+- The same thing written twice is one row with the amounts added up. Crossed-out or checked-off lines, headings ("Costco:", "Produce") and dates are left out.
+
+Uncheck what you don't need, then **Add**. Items merge with what's already on each list, and the lists open at the first store something went to. Reading a list and adding it need a connection (and the model, like photo imports).
 
 ### How the model reads recipes
 
@@ -162,6 +175,7 @@ Open it and log in with the server address (`https://shopping.example.com`), you
 The same pages as the website:
 
 - **Lists:** swipe between stores, check off, add with catalog suggestions (the one-tap "+ usual store", and "Save to catalog" for new things), edit, move, delete, clear checked (with undo), drag to reorder.
+- **Scan a shopping list** from a photo or pasted text, and check the matches and stores before adding, as on the website.
 - **Recipes:** search; new, edit, delete, copy to another household; import from a photo (camera or gallery, up to 4) or a link; **Add details** to fill in what a recipe is missing; read ingredients and directions (tap a step when it's done, keep the screen on); add recipes to the lists with multipliers and a store per ingredient.
 - **Catalog:** filter by store (remembered), search, add, rename, change store rankings, delete.
 - **Settings:** stores (add, rename, reorder, delete), switch or create households, invites, members (roles, password reset, remove), rename, leave or delete; account (change password, log out); sign up.
@@ -215,6 +229,8 @@ The app uses `/api/v1` ([app/routes/api.py](app/routes/api.py)), with a bearer t
 | `POST /h/{id}/catalog`, `PUT/DELETE /h/{id}/catalog/{id}` | Catalog |
 | `POST /h/{id}/recipes`, `PUT/DELETE /h/{id}/recipes/{id}`, `GET …/{id}/draft`, `POST …/{id}/copy` | Recipes |
 | `POST /h/{id}/recipes/scan` (photos), `POST /h/{id}/recipes/import` (link) | Read a recipe into a draft to review; with `recipe_id`, only fill that recipe's gaps |
+| `POST /h/{id}/lists/scan` (`photos`, or `text`) | Read a shopping list into rows to check: `{notice, items: [{name, qty, read_as, catalog_id, ranks, store, on_list}]}` |
+| `POST /h/{id}/lists/add` | `{items: [{name, qty, store}], save_new}`: add them (new things join the catalog when `save_new`); returns `{added, store_id, state}` |
 
 ## Accounts
 

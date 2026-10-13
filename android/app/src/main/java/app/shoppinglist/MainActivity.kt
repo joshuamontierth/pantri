@@ -46,6 +46,7 @@ import app.shoppinglist.ui.PlanScreen
 import app.shoppinglist.ui.ReadingOverlay
 import app.shoppinglist.ui.RecipeScreen
 import app.shoppinglist.ui.RecipesScreen
+import app.shoppinglist.ui.ScanReviewScreen
 import app.shoppinglist.ui.Screen
 import app.shoppinglist.ui.SettingsScreen
 import app.shoppinglist.ui.SetupScreen
@@ -120,7 +121,7 @@ private fun AppRoot(vm: AppViewModel) {
             vm.householdId < 0 -> HouseholdsScreen(vm, canGoBack = false)
             else -> MainScreens(vm, snackbar)
         }
-        if (vm.reading) ReadingOverlay()
+        vm.reading?.let { ReadingOverlay(it) }
     }
 }
 
@@ -129,7 +130,11 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
     val view by vm.view.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
     BackHandler(enabled = vm.stack.size > 1) {
-        if (vm.screen == Screen.Editor) vm.closeEditor() else vm.back()
+        when (vm.screen) {
+            Screen.Editor -> vm.closeEditor()
+            Screen.ScanReview -> vm.closeScanReview()
+            else -> vm.back()
+        }
     }
 
     if (vm.householdGone) {
@@ -180,6 +185,7 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
         is Screen.CatalogEdit -> CatalogEditScreen(vm, current, screen.itemId, screen.name, snackbar)
         Screen.Stores -> StoresScreen(vm, current, snackbar)
         Screen.Editor -> vm.editor?.let { EditorScreen(vm, current, it, snackbar) } ?: run { vm.back() }
+        Screen.ScanReview -> vm.scanReview?.let { ScanReviewScreen(vm, current, it, snackbar) } ?: run { vm.back() }
         else -> Unit
     }
 }

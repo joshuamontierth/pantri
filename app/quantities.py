@@ -52,6 +52,8 @@ _ALIAS_MAP = {alias: canon for canon, aliases in _ALIASES.items() for alias in a
 
 _DISPLAY = {"l": "L"}
 _PLURAL_STANDARD = {"cup": "cups"}
+# Counts that read the same for many: "3 dozen", not "3 dozens".
+_SAME_PLURAL = {"dozen", "each"}
 
 _UNICODE_FRACTIONS = {
     "½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4",
@@ -250,7 +252,7 @@ def display_unit(unit, amount):
         if plural and unit in _PLURAL_STANDARD:
             return _PLURAL_STANDARD[unit]
         return _DISPLAY.get(unit, unit)
-    return _pluralize(unit) if plural else unit
+    return _pluralize(unit) if plural and unit not in _SAME_PLURAL else unit
 
 
 def _family_units():

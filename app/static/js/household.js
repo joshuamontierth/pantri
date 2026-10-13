@@ -22,6 +22,7 @@
   const VOLUME = { tsp: 4.92892159375, tbsp: 14.78676478125, "fl oz": 29.5735295625, cup: 236.5882365, pt: 473.176473, qt: 946.352946, gal: 3785.411784, ml: 1, l: 1000 };
   const WEIGHT = { oz: 28.349523125, lb: 453.59237, g: 1, kg: 1000 };
   const FRACTIONS = [[0, ""], [1 / 8, "⅛"], [1 / 4, "¼"], [1 / 3, "⅓"], [3 / 8, "⅜"], [1 / 2, "½"], [5 / 8, "⅝"], [2 / 3, "⅔"], [3 / 4, "¾"], [7 / 8, "⅞"], [1, ""]];
+  const SAME_PLURAL = ["dozen", "each"]; // "3 dozen", not "3 dozens"
   const family = (u) => (u in VOLUME ? VOLUME : u in WEIGHT ? WEIGHT : null);
   const compatible = (a, b) => a === b || (family(a) !== null && family(a) === family(b));
   function combine(a, b) {
@@ -52,7 +53,7 @@
     const plural = w + f > 1 + 1e-9;
     let label;
     if (family(unit)) label = plural && unit === "cup" ? "cups" : unit === "l" ? "L" : unit;
-    else label = !plural ? unit : /(s|x|z|ch|sh)$/.test(unit) ? unit + "es" : /[^aeiou]y$/.test(unit) ? unit.slice(0, -1) + "ies" : unit + "s";
+    else label = !plural || SAME_PLURAL.includes(unit) ? unit : /(s|x|z|ch|sh)$/.test(unit) ? unit + "es" : /[^aeiou]y$/.test(unit) ? unit.slice(0, -1) + "ies" : unit + "s";
     return num + " " + label;
   }
   const formatParts = (parts) => parts.map((p) => formatPart(p[0], p[1])).join(" + ");

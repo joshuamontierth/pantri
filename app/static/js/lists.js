@@ -476,12 +476,12 @@
     if (b) pickSuggestion(Number(b.dataset.index), b.dataset.store);
   });
 
-  // "Added 3 items from recipes", after the recipe picker (plan.js) queued them.
+  // "Added 3 items from recipes" (plan.js) or "from your list" (listscan.js), left for this page to say.
   try {
-    const added = sessionStorage.getItem("sl:added");
-    if (added) {
-      sessionStorage.removeItem("sl:added");
-      setTimeout(() => actionToast("Added " + added + " item" + (added === "1" ? "" : "s") + " from recipes"), 200);
+    const said = sessionStorage.getItem("sl:toast");
+    if (said) {
+      sessionStorage.removeItem("sl:toast");
+      setTimeout(() => actionToast(said), 200);
     }
   } catch (_) { /* storage blocked */ }
 

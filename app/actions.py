@@ -8,9 +8,9 @@ import re
 
 from sqlalchemy import func
 
-from . import security, services
+from . import quantities, scan, security, services
 from .events import broker
-from .models import CatalogItem, Household, Invite, Membership, Recipe, RecipeIngredient, Store, User
+from .models import CatalogItem, Household, Invite, ListItem, Membership, Recipe, RecipeIngredient, Store, User
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 
@@ -342,3 +342,103 @@ def copy_recipe(db, membership, recipe_id, target_household_id):
     db.commit()
     broker.publish(target_household_id, "recipes")
     return copy
+
+
+# ---------- a shopping list read from photos or pasted text ----------
+
+def scanned_list(db, household_id, found):
+    """What the list reader found, as rows to check before adding:
+    [{name, qty, read_as, catalog_id, ranks, store, on_list}].
+
+    Items in the catalog take its name, and their usual store is suggested (or else the list
+    they're already on). Something written twice becomes one row. read_as is how it was written,
+    when that doesn't show the name.
+    """
+    stores = {s.id: s.name for s in services.household_stores(db, household_id)}
+    match = services.catalog_matcher(services.catalog_items(db, household_id))
+    unchecked = db.query(ListItem).filter_by(household_id=household_id, checked=False).all()
+    rows = {}
+    for ing in found:
+        amount, unit = scan.clean_amount(ing["amount"], ing["unit"])
+        try:
+            parts = quantities.parse_quantity(f"{amount} {unit}") if amount else []
+        except ValueError:
+            parts = []
+        known = match(ing["item"])
+        name = known.name if known else ing["item"][:1].upper() + ing["item"][1:]
+        key = ("c", known.id) if known else ("n", services.name_key(name))
+        if key in rows:
+            rows[key]["parts"] = quantities.combine(rows[key]["parts"], parts)
+            continue
+        line = ing.get("line") or ""
+        ranks = [sid for sid in (known.ranked_store_ids if known else []) if sid in stores]
+        on_list = [
+            i for i in unchecked
+            if (known is not None and i.catalog_item_id == known.id) or services.name_key(i.name) == services.name_key(name)
+        ]
+        rows[key] = {
+            "name": name,
+            "parts": parts,
+            "read_as": line if line and name.lower() not in line.lower() else "",
+            "catalog_id": known.id if known else None,
+            "ranks": ranks,
+            # Its usual store; failing that, the list it's already on.
+            "store": ranks[0] if ranks else next((i.store_id for i in on_list if i.store_id in stores), None),
+            "on_list": [
+                stores.get(i.store_id, services.OTHER_LABEL)
+                + (f": {quantities.format_quantity(i.quantities)}" if i.quantities else "")
+                for i in on_list
+            ],
+        }
+    out = list(rows.values())
+    for row in out:
+        row["qty"] = quantities.quantity_input_text(row.pop("parts"))
+    return out
+
+
+def scanned_notice(rows, source):
+    n = len(rows)
+    new = sum(1 for r in rows if r["catalog_id"] is None)
+    text = f"Read {n} item{'s' if n != 1 else ''} from {source}."
+    if new:
+        text += f" {new} {'is' if new == 1 else 'are'} new to your catalog."
+    return text + " Check the stores, then add them."
+
+
+def add_scanned(db, household_id, rows, save_new):
+    """Add the rows someone kept ([{name, qty, store}]) to the lists.
+
+    With save_new, things that aren't in the catalog yet join it, at the store they went to.
+    Returns (how many, the first one's store id).
+    """
+    rows = [dict(r, name=(r.get("name") or "").strip(), qty=(r.get("qty") or "").strip()) for r in rows]
+    rows = [r for r in rows if r["name"]]
+    if not rows:
+        raise ActionError("Check the items you want to add.")
+    for r in rows:
+        if len(r["name"]) > 100:
+            raise ActionError(f"Item names can be up to 100 characters: {r['name'][:30]}…")
+        if len(r["qty"]) > 100:
+            raise ActionError(f"The amount for {r['name']} is too long.")
+    stores = {s.id for s in services.household_stores(db, household_id)}
+    match = services.catalog_matcher(services.catalog_items(db, household_id))
+    created = {}
+    keys = []
+    for r in rows:
+        store_id = r.get("store") if r.get("store") in stores else None
+        item = match(r["name"]) or created.get(services.name_key(r["name"]))
+        if item is None and save_new:
+            item = services.create_catalog_item(db, household_id, r["name"], [store_id] if store_id else [])
+            created[services.name_key(r["name"])] = item
+        try:
+            parts, note = quantities.parse_quantity(r["qty"]), ""
+        except ValueError:
+            parts, note = [], r["qty"]  # like the lists: an amount we can't read is kept as a note
+        services.add_to_list(db, household_id, store_id, r["name"], parts, catalog_item=item, note=note)
+        keys.append(services.store_key(store_id))
+    db.commit()
+    broker.publish(household_id, "lists", stores=list(dict.fromkeys(keys)))
+    if created:
+        broker.publish(household_id, "catalog")
+    first = keys[0]
+    return len(rows), None if first == services.NO_STORE else int(first)

@@ -34,6 +34,13 @@
   - Quick-add goes to the list on screen (autocomplete from catalog).
   - A suggestion whose 1st-choice store is a different store also offers "+ <that store>" to send it there.
   - Typing a name not in the catalog offers to save it to the catalog with store rankings.
+- **Scan a shopping list** (button beside quick-add, hidden while typing; needs the model and a connection):
+  - From photos (camera or library, up to 4) of a handwritten or printed list or a screenshot, or from pasted text.
+  - Crossed-out or checked-off lines, headings and dates are left out; misspellings and abbreviations are written out; "x2" and ranges become amounts (the larger number).
+  - Review page ("Add from your list"): one row per item, all checked, with editable name and quantity and a store dropdown like the recipe picker's. The same item written twice is one row with amounts combined.
+  - Matching: the catalog's name when it's the same product (same name, or the same but for a plural, after the model maps wording like "OJ" to a catalog name). Matched items start at their 1st-ranked store; items not in the catalog start at the list they're already on, else "Other". A renamed row is matched again; a store picked by hand stays.
+  - Rows show "New" (not in the catalog), "Written “…”" (when the written line doesn't show the name) and "Already on <store>: <qty>".
+  - Add → each checked row is added to its store's list, merging per the rules below. With **Save new items to the catalog** (on by default), new items are created in the catalog ranked at the store picked (no ranking for "Other").
 - **Merging:** adding an item that already exists *unchecked* on that list merges into one line (quantities summed, recipe tags combined). If the existing line is checked, a new line is created.
 
 ## Ingredient Catalog (per household)
@@ -58,13 +65,13 @@
 ## Quantities & Units
 - Units: common list (tsp, tbsp, cup, pt, qt, gal, fl oz, ml, L, oz, lb, g, kg, each; US measures) + free-text custom units (can, bunch, clove…). Quantity is optional (e.g. "salt").
 - Merging converts within a unit type (volume ↔ volume, weight ↔ weight), shown in the existing line's unit. Custom units only merge with the same unit. Incompatible units stay on one line: `2 cups + 1 lb`.
-- Display as kitchen fractions (1½ cups, ¾ tsp), rounded to common fractions.
+- Display as kitchen fractions (1½ cups, ¾ tsp), rounded to common fractions. Custom units are pluralized ("3 cans"), except "dozen" and "each".
 
 ## Android app
 - Native client for the same server and accounts; the website stays fully usable.
 - Lists and recipes work offline from a copy kept on the phone. Changes queue on the phone and sync when the server is reachable (also in the background after the app is closed); each change is applied once by the server.
 - Live updates while the app is open.
-- Same features and behavior as the website (accounts, households, members, stores, catalog, recipes with import and add details, adding recipes to lists), backed by the same server code. Sharing a link or photos to the app (or to the installed website) imports a recipe.
+- Same features and behavior as the website (accounts, households, members, stores, catalog, recipes with import and add details, adding recipes to lists, scanning a shopping list), backed by the same server code. Sharing a link or photos to the app (or to the installed website) imports a recipe.
 
 ## Offline website
 - The lists page works offline from a copy kept in the browser, with the same change queue and sync as the Android app; it syncs when the server is reachable and shows live updates when online.

@@ -176,36 +176,6 @@ def recipes_page(request: Request, household_id: int, membership=Depends(househo
     return _recipes_page(request, db, membership)
 
 
-# Seasoning-sized measures don't belong on a shopping list; these become a blank amount.
-_VAGUE_RE = re.compile(r"\b(pinch|pinches|dash|dashes|smidgen|splash|sprinkle|drizzle|to taste|as needed|as desired|optional)\b", re.I)
-
-
-def _clean_scanned_amount(amount_text, unit_text):
-    """Tidy what the model read ("1-2", "Tbsp.", "cloves") into what the editor accepts, or blank it."""
-    amount_text, unit_text = amount_text.strip(), unit_text.strip()
-    if _VAGUE_RE.search(amount_text) or _VAGUE_RE.search(unit_text):
-        return "", ""
-    # A package size that ended up in the unit: "4" + "4 ounce" is 4, "1" + "16 ounce package" is 1 package.
-    unit_text = re.sub(r"^\(?\s*[\d./]+\s*-?\s*[a-z]+\.?\s*\)?\s*", "", unit_text, flags=re.I) if amount_text else unit_text
-    rng = re.match(r"^(.+?)\s*(?:-|–|to)\s*(.+)$", amount_text)
-    if rng:
-        amount_text = rng.group(2)  # ranges: buy enough for the larger amount
-    if not amount_text:
-        return "", ""
-    try:
-        value = quantities.parse_amount(amount_text)
-        unit = quantities.normalize_unit(unit_text)
-    except ValueError:
-        try:
-            # e.g. amount "2 cups" with the unit folded in
-            value, unit = quantities.parse_part(f"{amount_text} {unit_text}")
-        except ValueError:
-            return "", ""  # "some", "a few": leave it blank so the recipe still saves
-    if not value or value <= 0:
-        return "", ""
-    return quantities.amount_input_text(value), quantities.unit_label(unit)
-
-
 @router.post("/h/{household_id}/recipes/scan")
 def scan_recipe(request: Request, household_id: int, form=Depends(form_data), membership=Depends(household_member), db: Session = Depends(get_db)):
     """Read a recipe from photos and open it in the editor for review. Nothing is saved yet."""
@@ -258,7 +228,7 @@ def _rows_from_import(catalog, ingredients):
     rows, seen = [], set()
     for ing in ingredients:
         known = by_name.get(ing["item"].lower())
-        amount, unit = _clean_scanned_amount(ing["amount"], ing["unit"])
+        amount, unit = scan.clean_amount(ing["amount"], ing["unit"])
         key = ing["item"].lower()
         if key in seen and not amount:
             continue  # "1 tsp salt, plus more for sprinkling" read as two salts
@@ -274,12 +244,6 @@ def _rows_from_import(catalog, ingredients):
 
 
 # ---------- adding details to an existing recipe ----------
-
-def _name_key(name):
-    """'Avocados' and 'avocado' are the same ingredient."""
-    words = name.lower().split()
-    return " ".join(words[:-1] + [quantities.singularize(words[-1])]) if words else ""
-
 
 def _names_for_model(recipe, catalog):
     """The recipe's own ingredients first, so the model reuses their names."""
@@ -298,14 +262,14 @@ def augment(recipe, catalog, data):
     Returns {rows, directions, source_url, fresh: {directions, link}, found: ["directions", "2 ingredients", ...]}.
     """
     rows = _rows_from_recipe(recipe)
-    by_key = {_name_key(r["name"]): r for r in rows}
+    by_key = {services.name_key(r["name"]): r for r in rows}
     added = filled = 0
     for row in _rows_from_import(catalog, data["ingredients"]):
-        have = by_key.get(_name_key(row["name"]))
+        have = by_key.get(services.name_key(row["name"]))
         if have is None:
             row["fresh"] = "Added"
             rows.append(row)
-            by_key[_name_key(row["name"])] = row
+            by_key[services.name_key(row["name"])] = row
             added += 1
         elif not have["amount"] and row["amount"] and not have.get("fresh"):
             have.update(amount=row["amount"], unit=row["unit"], fresh="Amount added")

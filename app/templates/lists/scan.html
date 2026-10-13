@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% set nav = "lists" %}
+{% block title %}Add from your list · {{ household.name }}{% endblock %}
+{% block body_attrs %}data-household="{{ household.id }}"{% endblock %}
+{% block scripts %}
+<script src="/static/js/listscan.js?v={{ static_v }}" defer></script>
+{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+{% set ORDINALS = ["1st", "2nd", "3rd"] %}
+<div class="narrow">
+  <a class="back-link" href="/h/{{ hid }}">{{ icon("chevron-left", 18) }}Lists</a>
+  <h1 class="page-title">{{ "Add from your list" if rows else "Scan a shopping list" }}</h1>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert info">{{ notice }}</p>{% endif %}
+
+  {% if rows %}
+  {# listscan.js keeps the stores and "New" tags in step with edited names, and counts what's checked. #}
+  <form method="post" action="/h/{{ hid }}/lists/scan/add" data-scan-review>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="count" value="{{ rows|length }}">
+    <div class="pick-tools"><span class="section-label">Check what you need</span><button type="button" class="linklike" data-select-all hidden>Select all</button></div>
+    <ul class="pick-list">
+      {% for r in rows %}
+      {% set i = loop.index0 %}
+      {% set on = r.on is not defined or r.on %}
+      <li class="pick-row scan-row{{ ' on' if on }}" data-row>
+        <div class="scan-main">
+          <input type="checkbox" class="box" name="pick" value="{{ i }}"{{ ' checked' if on }} data-include aria-label="Add this item">
+          <div class="scan-fields">
+            <div class="scan-line">
+              <input class="scan-name" name="name_{{ i }}" value="{{ r.name }}" maxlength="100" aria-label="Item"
+                     autocomplete="off" autocapitalize="sentences" list="catalog-names" data-name data-original="{{ r.name }}">
+              <input class="scan-qty" name="qty_{{ i }}" value="{{ r.qty }}" maxlength="100" placeholder="Qty" aria-label="Quantity, like 2 lb">
+            </div>
+            <div class="scan-meta">
+              <span class="fresh-tag" data-new{{ ' hidden' if r.catalog_id }}>New</span>
+              {% if r.read_as %}<span class="read-as">Written “{{ r.read_as }}”</span>{% endif %}
+              {% if r.on_list %}<span class="on-list" data-on-list>Already on {{ r.on_list|join(", ") }}</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        <select class="pick-store" name="store_{{ i }}" aria-label="Store" data-store data-suggested="{{ 'none' if r.store is none else r.store }}">
+          {% if r.ranks %}
+          <optgroup label="Your stores for this">
+            {% for sid in r.ranks %}{% set s = stores|selectattr("id", "equalto", sid)|first %}
+            <option value="{{ sid }}"{{ ' selected' if sid == r.store }}>{{ s.name }} · {{ ORDINALS[loop.index0] if loop.index0 < 3 else loop.index ~ "th" }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+          {% set others = stores|rejectattr("id", "in", r.ranks)|list %}
+          {% if others %}
+          <optgroup label="{{ 'Other stores' if r.ranks else 'Stores' }}">
+            {% for s in others %}<option value="{{ s.id }}"{{ ' selected' if s.id == r.store }}>{{ s.name }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+          <option value="none"{{ ' selected' if r.store is none }}>{{ OTHER_LABEL }}</option>
+        </select>
+      </li>
+      {% endfor %}
+    </ul>
+    <label class="save-new" data-save-new>
+      <input type="checkbox" class="box" name="save_new" value="1"{{ ' checked' if save_new }}>
+      <span><strong>Save new items to the catalog</strong><span>At the store you picked, so they go there next time</span></span>
+    </label>
+    <div class="sticky-actions">
+      <button class="btn primary grow apply-btn" data-apply><span class="apply-main">Add to lists</span><span class="apply-sub"></span></button>
+    </div>
+  </form>
+  <datalist id="catalog-names">{% for n in catalog_names %}<option value="{{ n }}">{% endfor %}</datalist>
+  <script type="application/json" id="scan-catalog">{{ catalog_json|tojson }}</script>
+  <script type="application/json" id="scan-stores">{{ {"stores": stores|map(attribute="id")|list, "names": stores|map(attribute="name")|list, "other": OTHER_LABEL}|tojson }}</script>
+  {% else %}
+  <div class="form-actions">
+    {% with import_kind="list", import_base="/h/" ~ hid ~ "/lists", import_label="Try again", import_small=false %}{% include "recipes/_import.html" %}{% endwith %}
+    <a class="btn" href="/h/{{ hid }}">Back to lists</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

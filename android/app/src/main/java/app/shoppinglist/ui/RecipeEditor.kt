@@ -203,7 +203,7 @@ private fun IngredientRow(view: LocalView, ed: EditorState, row: EditorRow, know
 }
 
 @Composable
-private fun SmallField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier, bold: Boolean = false, capitalize: Boolean = false) {
+internal fun SmallField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier, bold: Boolean = false, capitalize: Boolean = false) {
     OutlinedTextField(
         value, onChange, modifier.heightIn(min = 48.dp), singleLine = true,
         placeholder = { Text(placeholder, color = colors.ink3, fontSize = 15.sp) },
@@ -219,14 +219,22 @@ private fun SmallField(value: String, onChange: (String) -> Unit, placeholder: S
  * Import a recipe (recipeId = null) or add details to one: take photos, choose photos, or paste a link.
  * The same choices as the website's Import / Add details sheet.
  */
+@Composable
+fun ImportSheet(vm: AppViewModel, recipeId: Long?, onDismiss: () -> Unit) = PhotosOrTextSheet(vm, recipeId, forList = false, onDismiss)
+
+/** Scan a shopping list: take photos, choose photos, or paste the list (the website's sheet on the lists page). */
+@Composable
+fun ScanListSheet(vm: AppViewModel, onDismiss: () -> Unit) = PhotosOrTextSheet(vm, null, forList = true, onDismiss)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ImportSheet(vm: AppViewModel, recipeId: Long?, onDismiss: () -> Unit) {
+private fun PhotosOrTextSheet(vm: AppViewModel, recipeId: Long?, forList: Boolean, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val photos = remember { mutableStateListOf<Uri>() }
-    var linkMode by remember { mutableStateOf(!vm.scanEnabled) }
-    var link by remember { mutableStateOf("") }
+    // Without the photo reader a recipe can still come from a link (a list can't be read at all).
+    var textMode by remember { mutableStateOf(!vm.scanEnabled) }
+    var text by remember { mutableStateOf("") }
     var pendingShot by remember { mutableStateOf<Uri?>(null) }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -244,28 +252,51 @@ fun ImportSheet(vm: AppViewModel, recipeId: Long?, onDismiss: () -> Unit) {
     }
     fun read() {
         onDismiss()
-        if (linkMode) vm.importRecipe(emptyList(), link.trim(), recipeId) else vm.importRecipe(photos.toList(), null, recipeId)
+        when {
+            forList -> if (textMode) vm.scanList(emptyList(), text.trim()) else vm.scanList(photos.toList(), null)
+            textMode -> vm.importRecipe(emptyList(), text.trim(), recipeId)
+            else -> vm.importRecipe(photos.toList(), null, recipeId)
+        }
     }
+    fun paste() {
+        val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+        clip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { text = it }
+    }
+    val readLabel = if (forList) "Read list" else "Read recipe"
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = colors.sheet) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (recipeId == null) "Import a recipe" else "Add details", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink)
+            Text(
+                when {
+                    forList -> "Scan a shopping list"
+                    recipeId == null -> "Import a recipe"
+                    else -> "Add details"
+                },
+                fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink,
+            )
             if (recipeId != null) {
                 Text("Fills in directions, missing ingredients and missing amounts. Nothing this recipe already has is changed.", color = colors.ink2, fontSize = 14.sp)
             }
             when {
-                linkMode -> {
+                textMode && forList -> {
+                    SectionLabel("Your list")
+                    Field(text, { text = it }, Modifier.fillMaxWidth(), placeholder = "Milk\nEggs x2\n2 lb ground beef",
+                        singleLine = false, minLines = 5, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlineButton("Paste", onClick = ::paste)
+                        Spacer(Modifier.width(8.dp))
+                        PrimaryButton(readLabel, onClick = ::read, enabled = text.isNotBlank(), modifier = Modifier.weight(1f))
+                    }
+                }
+                textMode -> {
                     SectionLabel("Recipe link")
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Field(link, { link = it }, Modifier.weight(1f), placeholder = "https://",
+                        Field(text, { text = it }, Modifier.weight(1f), placeholder = "https://",
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
                         Spacer(Modifier.width(8.dp))
-                        OutlineButton("Paste", onClick = {
-                            val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
-                            clip?.getItemAt(0)?.coerceToText(context)?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { link = it }
-                        })
+                        OutlineButton("Paste", onClick = ::paste)
                     }
-                    PrimaryButton("Import", onClick = ::read, enabled = link.isNotBlank(), modifier = Modifier.fillMaxWidth())
+                    PrimaryButton("Import", onClick = ::read, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth())
                 }
                 photos.isNotEmpty() -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -278,17 +309,25 @@ fun ImportSheet(vm: AppViewModel, recipeId: Long?, onDismiss: () -> Unit) {
                             }
                         }
                     }
-                    Text(if (photos.size >= 4) "4 photos is the most" else "Add another photo, like the back of the card, or read it now.", color = colors.ink2, fontSize = 14.sp)
+                    Text(
+                        when {
+                            photos.size >= 4 -> "4 photos is the most"
+                            forList -> "Add another photo, like the rest of the list, or read it now."
+                            else -> "Add another photo, like the back of the card, or read it now."
+                        },
+                        color = colors.ink2, fontSize = 14.sp,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (photos.size < 4) OutlineButton("Take another", small = true, icon = AppIcons.Camera, onClick = ::shoot)
                         if (photos.size < 4) OutlineButton("Choose", small = true, icon = AppIcons.Image, onClick = { choose.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
                     }
-                    PrimaryButton(if (photos.size > 1) "Read ${photos.size} photos" else "Read recipe", onClick = ::read, modifier = Modifier.fillMaxWidth())
+                    PrimaryButton(if (photos.size > 1) "Read ${photos.size} photos" else readLabel, onClick = ::read, modifier = Modifier.fillMaxWidth())
                 }
                 else -> {
-                    Choice(AppIcons.Camera, "Take a photo", "A recipe card or cookbook page", ::shoot)
+                    Choice(AppIcons.Camera, "Take a photo", if (forList) "A handwritten or printed list" else "A recipe card or cookbook page", ::shoot)
                     Choice(AppIcons.Image, "Choose photos", "Up to 4, screenshots work too") { choose.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                    Choice(AppIcons.Link, "Paste a link", "From a recipe website") { linkMode = true }
+                    if (forList) Choice(AppIcons.Paste, "Paste a list", "Typed in a note or a message") { textMode = true }
+                    else Choice(AppIcons.Link, "Paste a link", "From a recipe website") { textMode = true }
                 }
             }
             OutlineButton("Cancel", onClick = onDismiss, modifier = Modifier.fillMaxWidth())
@@ -327,9 +366,9 @@ private fun Thumbnail(uri: Uri) {
     image?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } ?: Box(Modifier.fillMaxSize().background(colors.rule))
 }
 
-/** Over everything while the model reads a recipe (the website's "Reading the recipe" card). */
+/** Over everything while the model reads (the website's "Reading the recipe" / "Reading the list" card). */
 @Composable
-fun ReadingOverlay() {
+fun ReadingOverlay(title: String) {
     Box(Modifier.fillMaxSize().background(colors.ink.copy(alpha = 0.42f)).clickable(enabled = true, onClick = {}), contentAlignment = Alignment.Center) {
         Column(
             Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(18.dp)).background(colors.sheet).padding(horizontal = 24.dp, vertical = 30.dp),
@@ -337,7 +376,7 @@ fun ReadingOverlay() {
         ) {
             CircularProgressIndicator(Modifier.size(40.dp), color = colors.accent, strokeWidth = 3.dp)
             Spacer(Modifier.size(6.dp))
-            Text("Reading the recipe", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink)
+            Text(title, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink)
             Text("This usually takes a few seconds.", color = colors.ink2, fontSize = 15.sp)
         }
     }

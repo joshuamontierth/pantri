@@ -197,13 +197,11 @@ fun RecipeScreen(vm: AppViewModel, view: Household, recipeId: Long, snackbar: Sn
                     }
                 }
                 if (steps.isEmpty()) {
-                    Column(
+                    Text(
+                        "No directions yet. Use Add details to read them from ${if (vm.scanEnabled) "a photo of the recipe or " else ""}a link to it.",
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, colors.rule2, RoundedCornerShape(14.dp)).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text("No directions yet. Add them from a photo of the recipe or a link to it.", color = colors.ink2, fontSize = 15.sp)
-                        OutlineButton("Add directions", small = true, icon = AppIcons.Import, onClick = { addingDetails = true })
-                    }
+                        color = colors.ink2, fontSize = 15.sp,
+                    )
                 } else if (steps.size == 1 && steps[0] is Directions.Step) {
                     Text((steps[0] as Directions.Step).text, fontSize = 17.sp, lineHeight = 27.sp, color = colors.ink)
                 } else {
@@ -466,7 +464,7 @@ private fun MultiplierField(value: String, onChange: (String) -> Unit, focus: Fo
 }
 
 @Composable
-private fun StorePicker(view: Household, ranks: List<Long>, selected: Long?, enabled: Boolean, onPick: (Long?) -> Unit) {
+internal fun StorePicker(view: Household, ranks: List<Long>, selected: Long?, enabled: Boolean, onPick: (Long?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     fun label(id: Long?): String {
         val i = ranks.indexOf(id)

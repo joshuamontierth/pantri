@@ -10,6 +10,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.shoppinglist.ShoppingApp
 import app.shoppinglist.data.AddOp
+import app.shoppinglist.data.AddScanned
+import app.shoppinglist.data.AddScannedItem
 import app.shoppinglist.data.ApiException
 import app.shoppinglist.data.CheckOp
 import app.shoppinglist.data.DeleteOp
@@ -18,6 +20,7 @@ import app.shoppinglist.data.Household
 import app.shoppinglist.data.HouseholdSettings
 import app.shoppinglist.data.ItemKey
 import app.shoppinglist.data.LocalItem
+import app.shoppinglist.data.LocalView
 import app.shoppinglist.data.LoginResult
 import app.shoppinglist.data.Me
 import app.shoppinglist.data.Op
@@ -28,6 +31,8 @@ import app.shoppinglist.data.RecipeDraft
 import app.shoppinglist.data.ReorderOp
 import app.shoppinglist.data.SaveIngredient
 import app.shoppinglist.data.SaveRecipe
+import app.shoppinglist.data.ScannedItem
+import app.shoppinglist.data.ScannedList
 import app.shoppinglist.data.StateResult
 import app.shoppinglist.data.UpdateOp
 import app.shoppinglist.data.toJson
@@ -52,6 +57,7 @@ sealed interface Screen {
     data class PlanChoose(val preselected: List<Long> = emptyList()) : Screen
     data class Plan(val recipeIds: List<Long>) : Screen
     data object Editor : Screen // the recipe being edited is AppViewModel.editor
+    data object ScanReview : Screen // what was read from a shopping list is AppViewModel.scanReview
     data class CatalogEdit(val itemId: Long?, val name: String = "") : Screen
     data object Stores : Screen
     data object Settings : Screen
@@ -90,6 +96,46 @@ class EditorRow(name: String, amount: String, unit: String, ranks: List<Long>, v
     companion object {
         private var nextKey = 0L
     }
+}
+
+/** One row of "Add from your list": what the list reader found, as the person fixes it up. */
+class ScanRow(item: ScannedItem) {
+    val key = nextKey++
+    private val original = item.name
+    private val suggested = item.store
+    val readAs = item.readAs
+    val onList = item.onList
+    var name by mutableStateOf(item.name)
+    var qty by mutableStateOf(item.qty)
+    var include by mutableStateOf(true)
+    /** A store picked by hand (pickedStore null is Other) stays picked when the name changes. */
+    var pickedByHand by mutableStateOf(false)
+    var pickedStore by mutableStateOf<Long?>(null)
+
+    private val unchanged get() = name.trim().equals(original, ignoreCase = true)
+
+    /** Like the website: a different name is matched to the catalog again. */
+    fun isNew(view: LocalView) = name.isNotBlank() && view.matchCatalog(name) == null
+    fun ranks(view: LocalView) = view.matchCatalog(name)?.ranks.orEmpty().filter { view.hasStore(it) }
+    fun store(view: LocalView): Long? = when {
+        pickedByHand -> pickedStore.takeIf { view.hasStore(it) }
+        unchanged -> suggested.takeIf { view.hasStore(it) }
+        else -> ranks(view).firstOrNull()
+    }
+    fun showOnList() = unchanged && onList.isNotEmpty()
+
+    companion object {
+        private var nextKey = 0L
+    }
+}
+
+/** "Add from your list" (the website's review page after scanning a list). Nothing is added until Add. */
+class ScanReview(list: ScannedList) {
+    val notice = list.notice
+    val rows = list.items.map(::ScanRow)
+    var saveNew by mutableStateOf(true)
+    var adding by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
 }
 
 /** The recipe editor (the website's recipe form). */
@@ -147,8 +193,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var editor by mutableStateOf<EditorState?>(null)
         private set
 
-    /** Set while the model reads a recipe ("Reading the recipe" over everything). */
-    var reading by mutableStateOf(false)
+    /** Set while the model reads: "Reading the recipe" or "Reading the list", over everything. */
+    var reading by mutableStateOf<String?>(null)
+        private set
+
+    /** A shopping list just read, being checked before it's added. */
+    var scanReview by mutableStateOf<ScanReview?>(null)
         private set
 
     /** A link or photos shared to the app, waiting for a household to be open. */
@@ -314,6 +364,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         householdId = -1
         households = emptyList()
         editor = null
+        scanReview = null
         tab(Screen.Lists)
     }
 
@@ -518,13 +569,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Read a recipe from photos or a link. recipeId: only fill that recipe's gaps (Add details). */
     fun importRecipe(photos: List<Uri>, link: String?, recipeId: Long?) {
         val hid = householdId
-        reading = true
+        reading = "Reading the recipe"
         viewModelScope.launch {
             val r = online {
                 if (link != null) api.importLink(hid, link, recipeId)
                 else api.scanRecipe(hid, photos.take(4).map { Photos.prepare(getApplication(), it) }, recipeId)
             }
-            reading = false
+            reading = null
             when (r) {
                 is Outcome.Ok -> {
                     val draft = r.value
@@ -558,6 +609,56 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             else -> message("Share a link to a recipe page, or photos of a recipe.")
         }
+    }
+
+    // ---------- a shopping list from photos or pasted text (online, like the website) ----------
+
+    /** Read a shopping list from photos, or from text when there are none, and open it for checking. */
+    fun scanList(photos: List<Uri>, text: String?) {
+        val hid = householdId
+        reading = "Reading the list"
+        viewModelScope.launch {
+            val r = online { api.scanList(hid, photos.take(4).map { Photos.prepare(getApplication(), it) }, text) }
+            reading = null
+            when (r) {
+                is Outcome.Ok -> {
+                    scanReview = ScanReview(r.value)
+                    go(Screen.ScanReview)
+                }
+                is Outcome.Failed -> message(r.message)
+            }
+        }
+    }
+
+    /** Add the checked rows; new things join the catalog when saveNew is on. Then on to the lists. */
+    fun addScanned() {
+        val review = scanReview ?: return
+        val v = view.value ?: return
+        val hid = householdId
+        val picked = review.rows.filter { it.include }
+        val body = AddScanned(picked.map { AddScannedItem(it.name.trim(), it.qty.trim(), it.store(v)) }, review.saveNew)
+        review.adding = true
+        review.error = null
+        viewModelScope.launch {
+            when (val r = online { api.addScanned(hid, body) }) {
+                is Outcome.Ok -> {
+                    engine.acceptState(hid, r.value.state)
+                    scanReview = null
+                    // Like the website: open the lists at the first store something went to.
+                    setListPage(v.listIds.indexOf(r.value.storeId).coerceAtLeast(0))
+                    tab(Screen.Lists)
+                    val n = r.value.added
+                    message("Added $n item${if (n == 1) "" else "s"} from your list")
+                }
+                is Outcome.Failed -> review.error = r.message
+            }
+            review.adding = false
+        }
+    }
+
+    fun closeScanReview() {
+        scanReview = null
+        back()
     }
 
     // ---------- list changes (queued; they work offline) ----------

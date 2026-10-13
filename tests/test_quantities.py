@@ -45,6 +45,7 @@ def test_combine_converts_within_family_and_keeps_others():
     assert format_quantity(q) == "2½ cups + 1 lb"
     assert format_quantity(combine([[1, "lb"]], [[8, "oz"]])) == "1½ lb"
     assert format_quantity(combine([[2, "can"]], [[1, "can"], [1, "jar"]])) == "3 cans + 1 jar"
+    assert format_quantity([[3, "dozen"]]) == "3 dozen" and format_quantity([[2, "each"]]) == "2 each"
 
 
 def test_format_fractions_and_metric():

@@ -252,6 +252,21 @@ def catalog_items(db, household_id):
     )
 
 
+def name_key(name):
+    """'Avocados' and 'avocado' are the same item."""
+    words = name.lower().split()
+    return " ".join(words[:-1] + [quantities.singularize(words[-1])]) if words else ""
+
+
+def catalog_matcher(catalog):
+    """A function from a name to the catalog item it means: the same name, or the same but for a plural."""
+    by_lower = {c.name_lower: c for c in catalog}
+    by_key = {}
+    for c in catalog:
+        by_key.setdefault(name_key(c.name), c)
+    return lambda name: by_lower.get(name.strip().lower()) or by_key.get(name_key(name.strip()))
+
+
 def primary_store_id(catalog_item):
     return catalog_item.ranks[0].store_id if catalog_item and catalog_item.ranks else None
 

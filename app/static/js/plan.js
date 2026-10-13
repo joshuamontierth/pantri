@@ -236,7 +236,7 @@
         op_id: hh.uid(), type: "add", ref: hh.uid(), name: r.name, qty: null, parts: r.parts, note: "",
         store: r.store === "none" ? null : Number(r.store), tags: r.tags,
       })));
-      try { sessionStorage.setItem("sl:added", String(picked.length)); } catch (_) { /* no toast then */ }
+      try { sessionStorage.setItem("sl:toast", "Added " + picked.length + " item" + (picked.length === 1 ? "" : "s") + " from recipes"); } catch (_) { /* no toast then */ }
       location.href = "/h/" + hid + "#store-" + picked[0].store;
     }
   });
