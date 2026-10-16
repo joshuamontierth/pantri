@@ -64,7 +64,7 @@ private val noAutocorrect = KeyboardOptions(autoCorrectEnabled = false, capitali
 @Composable
 fun SetupScreen(vm: AppViewModel) {
     var signingUp by rememberSaveable { mutableStateOf(false) }
-    var server by rememberSaveable { mutableStateOf(vm.serverUrl) }
+    var server by rememberSaveable { mutableStateOf(vm.serverUrl.ifEmpty { BuildConfig.SERVER_URL }) }
     var username by rememberSaveable { mutableStateOf(vm.username) }
     var password by rememberSaveable { mutableStateOf("") }
     var confirm by rememberSaveable { mutableStateOf("") }
@@ -93,7 +93,7 @@ fun SetupScreen(vm: AppViewModel) {
             }
             error?.let { Alert(it) }
             Field(
-                server, { server = it }, label = "Server", placeholder = "https://shopping.example.com",
+                server, { server = it }, label = "Server", placeholder = AppViewModel.EXAMPLE_SERVER,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, autoCorrectEnabled = false),
             )
             Field(username, { username = it }, label = "Username", keyboardOptions = noAutocorrect.copy(imeAction = ImeAction.Next))

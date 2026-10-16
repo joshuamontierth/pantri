@@ -9,3 +9,6 @@ tests
 *.db-wal
 *.db-shm
 dev
+.env
+*.local.md
+android

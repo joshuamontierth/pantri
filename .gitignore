@@ -2,8 +2,12 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-data/
-demo-data/
+/data/
+/demo-data/
 *.db
 *.db-wal
 *.db-shm
+
+# Local settings and notes (see .env.example)
+.env
+*.local.md

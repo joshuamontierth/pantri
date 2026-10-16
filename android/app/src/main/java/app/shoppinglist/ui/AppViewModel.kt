@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import app.shoppinglist.BuildConfig
 import app.shoppinglist.ShoppingApp
 import app.shoppinglist.data.AddOp
 import app.shoppinglist.data.AddScanned
@@ -293,7 +294,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Log in, or sign up when confirm is given. Returns an error message, or null when in. */
     suspend fun login(server: String, username: String, password: String, confirm: String? = null): String? {
-        val base = normalizeServer(server) ?: return "Enter the server's address, like https://shopping.example.com"
+        val base = normalizeServer(server) ?: return "Enter the server's address, like $EXAMPLE_SERVER"
         val result: LoginResult = try {
             withContext(Dispatchers.IO) {
                 if (confirm == null) api.login(base, username.trim(), password) else api.signup(base, username.trim(), password, confirm)
@@ -744,6 +745,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
+        /** Your server (ANDROID_SERVER_URL in .env), or an example of what an address looks like. */
+        val EXAMPLE_SERVER: String = BuildConfig.SERVER_URL.ifEmpty { "https://shopping.example.com" }
+
         /** "shopping.example.com" -> "https://shopping.example.com". Null if blank. */
         fun normalizeServer(input: String): String? {
             var s = input.trim().trimEnd('/')

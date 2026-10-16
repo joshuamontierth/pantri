@@ -2,8 +2,6 @@
 
 A self-hosted, mobile-first shopping list server for a household. Each store has its own list, recipes know which stores you buy each ingredient at, and adding recipes drops the ingredients onto the right lists. See [SPEC.md](SPEC.md) for the full feature spec.
 
-**Live at https://shopping.example.com** (tailnet only). See [Our setup](#our-setup).
-
 - **Households:** shared groups of lists. Invite people by username. A household can have several admins, and you can belong to more than one household. The gear in the top bar opens settings, including switching households.
 - **Stores and lists:** one list per store, plus an "Other" list for items without a store. Swipe between stores. Drag to reorder, tap to check off, then "Clear checked" (with undo). New items go to the store you're viewing; suggestions offer a one-tap "+ usual store" when an item normally comes from somewhere else. Changes from other people appear live.
 - **Catalog:** each item has a ranked list of stores (1st, 2nd, 3rd…). Filter by store, or by "Other" to find items that still need one; the filter is remembered.
@@ -18,14 +16,20 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 ## Run it (Docker)
 
 ```bash
+cp .env.example .env
+```
+
+Fill in `.env` (see [Configuration](#configuration)); at least `OLLAMA_URL` if you have an Ollama server for reading photos. Then:
+
+```bash
 docker compose up -d --build
 ```
 
-Then open `http://<server-ip>:8000`, sign up, create a household, and add your stores.
+Open `http://<server-ip>:8000`, sign up, create a household, and add your stores.
 
 - Data lives in the `shopping-data` Docker volume as a single SQLite database (`/data/shopping.db`).
 - To reach it away from home, put it behind something like Tailscale or a reverse proxy.
-- `COOKIE_SECURE: "true"` in `docker-compose.yml` limits logins to HTTPS. Leave it `"false"` if you also use a plain `http://` address, or logging in there will stop working.
+- `COOKIE_SECURE=true` in `.env` limits logins to HTTPS. Leave it `false` if you also use a plain `http://` address, or logging in there will stop working.
 - Sign-up is open to anyone who can reach the server, so don't expose it to the open internet without a proxy or VPN in front.
 
 ### Upgrading
@@ -46,36 +50,19 @@ docker compose exec shopping python -c "import sqlite3; s=sqlite3.connect('/data
 docker compose cp shopping:/data/backup.db ./shopping-backup.db
 ```
 
-## Our setup
+### HTTPS with Tailscale (optional)
 
-The app runs on the server from `~/shopping_list`, on port 8000.
-
-| Address | Notes |
-| --- | --- |
-| https://shopping.example.com | Use this one. HTTPS through `tailscale serve`; needed for the in-app camera. |
-| http://shopping.example.com:8000 | Plain HTTP, still works. Taking a photo falls back to the phone's camera app here. |
-
-Logins are per address, so log in once on each.
-
-Deploy the latest `main`:
-
-```bash
-ssh you@server 'cd ~/shopping_list && git pull && docker compose up -d --build'
-```
-
-### HTTPS (Tailscale serve)
-
-HTTPS comes from Tailscale on the machine's own name. The certificate is issued and renewed by Tailscale.
+If the server is on Tailscale, `tailscale serve` gives the site HTTPS on the machine's tailnet name (`https://<machine>.<tailnet>.ts.net`), with a certificate Tailscale issues and renews. HTTPS is needed for the in-app camera and for the website to work offline; over plain `http://`, taking a photo opens the phone's camera app instead.
 
 ```bash
 tailscale serve --bg http://127.0.0.1:8000
 ```
 
-The machine may serve other things through `tailscale serve` too.
+- See what's served: `tailscale serve status`
+- Remove only this site's HTTPS: `tailscale serve --https=443 off`
+- If the machine serves anything else through `tailscale serve`, don't use `tailscale serve reset`: it removes all of them.
 
-- Check both are there: `tailscale serve status`
-- Remove only the shopping list's HTTPS: `tailscale serve --https=443 off`
-- **Never run `tailscale serve reset`**: it also removes everything else `tailscale serve` serves.
+Logins are per address, so log in once on each address you use.
 
 ## Importing recipes
 
@@ -135,16 +122,20 @@ Directions are plain text. In the editor, number the steps or leave a blank line
 
 ### Configuration
 
-Set these in `docker-compose.yml`:
+Settings live in `.env` (copy [`.env.example`](.env.example); `.env` stays out of git). Docker Compose reads it, and so does the server when you run it locally.
 
 | Variable | Default | |
 | --- | --- | --- |
-| `OLLAMA_URL` | `http://ollama.example.com:11434` | Ollama server. Set to `""` to turn off reading photos (links still work). |
+| `PORT` | `8000` | Host port the site is published on. |
+| `COOKIE_SECURE` | `false` | `true` when the site is served over HTTPS only. |
+| `OLLAMA_URL` | empty | Ollama server, like `http://localhost:11434`. Empty turns off reading photos and lists (recipe links still work). |
 | `OLLAMA_MODEL` | `gemma4:26b-a4b-it-qat` | Any Ollama model with vision. |
 | `OLLAMA_TIMEOUT` | `300` | Seconds to wait for an answer. |
 | `OLLAMA_NUM_CTX` | `8192` | Model context size in tokens. Ollama's default of 4096 is too small for four photos plus directions. |
+| `ANDROID_APP_ID` | `com.example.shoppinglist` | The Android app's id, used when building it. |
+| `ANDROID_SERVER_URL` | empty | Your server's address, filled in on the app's login screen. |
 
-The server running the app has to be able to reach it. If it can't, importing from photos shows an error, links fall back to simpler parsing, and recipes can still be typed in by hand.
+The server running the app has to be able to reach `OLLAMA_URL`. If it can't, importing from photos shows an error, links fall back to simpler parsing, and recipes can still be typed in by hand.
 
 ## Offline (website)
 
@@ -168,7 +159,7 @@ A native app (Kotlin + Jetpack Compose) in [`android/`](android/). It does every
 - **From the website:** gear → **Android app** → **Download the app**, on the phone. The section only appears once the APK has been put on the server (below). Android asks once to allow installs from your browser.
 - **Over USB:** `adb install -r android/dist/ShoppingList.apk`
 
-Open it and log in with the server address (`https://shopping.example.com`), your username and password. The phone needs Tailscale on to reach the server, just like the website.
+Open it and log in with your server's address (filled in for you when the app was built with `ANDROID_SERVER_URL`), your username and password. The phone has to be able to reach the server, just like the website (for example, with Tailscale on).
 
 ### What it does
 
@@ -192,7 +183,7 @@ What works offline is the same as on the website: lists and adding recipes to li
 
 ### Build it
 
-Needs the Android SDK (`android/local.properties` points at it) and JDK 17+.
+Needs the Android SDK (`android/local.properties` points at it) and JDK 17+. The build reads `ANDROID_APP_ID` and `ANDROID_SERVER_URL` from `.env` (environment variables win). Pick your own app id, and keep it: a build with a different id installs as a second app instead of an update.
 
 ```bash
 cd android && ./gradlew testDebugUnitTest assembleRelease
@@ -202,12 +193,10 @@ The signed APK is `android/app/build/outputs/apk/release/app-release.apk`; copy 
 
 ### Put it on the server
 
-```bash
-scp android/dist/ShoppingList.apk you@server:~/shopping_list/
-```
+Copy `android/dist/ShoppingList.apk` to the server, then from the folder with `docker-compose.yml` there:
 
 ```bash
-ssh you@server 'cd ~/shopping_list && docker compose cp ShoppingList.apk shopping:/data/ShoppingList.apk'
+docker compose cp ShoppingList.apk shopping:/data/ShoppingList.apk
 ```
 
 It lives in the data volume, so it survives rebuilds. Bump `versionCode` in `android/app/build.gradle.kts` for each new version.
@@ -249,6 +238,10 @@ python3 -m venv .venv
 ```
 
 ```bash
+cp .env.example .env
+```
+
+```bash
 DATA_DIR=./demo-data .venv/bin/python -m dev.seed_demo
 ```
 
@@ -258,7 +251,7 @@ DATA_DIR=./demo-data .venv/bin/uvicorn app.main:app --reload --port 8000
 
 The seed script creates users `demo` and `demo2` (the password is in `dev/seed_demo.py`) with stores, catalog items, two recipes, and a few list items. `localhost` counts as secure, so the in-app camera works in local development too.
 
-Run the tests (they never call the real Ollama server):
+Run the tests (they ignore `.env` and never call a real Ollama server):
 
 ```bash
 .venv/bin/python -m pytest -q

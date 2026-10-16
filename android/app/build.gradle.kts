@@ -13,16 +13,28 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Settings from the repo's .env (not in git; see .env.example). Environment variables win.
+val dotEnv: Map<String, String> = rootProject.file("../.env").takeIf { it.exists() }?.readLines().orEmpty()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("#") && "=" in it }
+    .associate { it.substringBefore("=").trim() to it.substringAfter("=").trim().removeSurrounding("\"").removeSurrounding("'") }
+
+fun setting(name: String, default: String): String =
+    System.getenv(name)?.takeIf { it.isNotBlank() } ?: dotEnv[name]?.takeIf { it.isNotBlank() } ?: default
+
 android {
     namespace = "app.shoppinglist"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.shoppinglist"
+        // Keep the same id (and signing key) so a new build installs over the old one.
+        applicationId = setting("ANDROID_APP_ID", "com.example.shoppinglist")
         minSdk = 26
         targetSdk = 35
         versionCode = 4
         versionName = "1.3"
+        // Filled in on the login screen.
+        buildConfigField("String", "SERVER_URL", "\"${setting("ANDROID_SERVER_URL", "")}\"")
     }
 
     signingConfigs {

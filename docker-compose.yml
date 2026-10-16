@@ -4,15 +4,16 @@ services:
     container_name: shopping-list
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     volumes:
       - shopping-data:/data
+    # Settings come from .env next to this file (copy .env.example); see the README's Configuration.
     environment:
-      # Set to "true" if you serve the site over HTTPS (e.g. behind a TLS reverse proxy).
-      COOKIE_SECURE: "false"
-      # Vision model for importing recipes from photos and tidying imported links. "" turns photos off.
-      OLLAMA_URL: "http://ollama.example.com:11434"
-      OLLAMA_MODEL: "gemma4:26b-a4b-it-qat"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      OLLAMA_URL: "${OLLAMA_URL:-}"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-gemma4:26b-a4b-it-qat}"
+      OLLAMA_TIMEOUT: "${OLLAMA_TIMEOUT:-300}"
+      OLLAMA_NUM_CTX: "${OLLAMA_NUM_CTX:-8192}"
 
 volumes:
   shopping-data:

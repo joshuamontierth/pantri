@@ -1,10 +1,14 @@
+import os
 import re
 
-import pytest
-from fastapi.testclient import TestClient
+# Before the app is imported: the tests use the code's defaults, never a developer's .env.
+os.environ["ENV_FILE"] = ""
 
-from app import db, models
-from app.main import app
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app import config, db, models  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -12,6 +16,12 @@ def fresh_db(tmp_path):
     db.init_engine(tmp_path / "test.db")
     yield
     db.engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def model_configured(monkeypatch):
+    """A model "set up" at an address that doesn't exist; tests that use it fake its answers."""
+    monkeypatch.setattr(config, "OLLAMA_URL", "http://ollama.invalid:11434")
 
 
 class User:
