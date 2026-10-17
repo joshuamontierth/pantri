@@ -6,6 +6,7 @@ A self-hosted, mobile-first shopping list server for a household. Each store has
 - **Stores and lists:** one list per store, plus an "Other" list for items without a store. Swipe between stores. Drag to reorder, tap to check off, then "Clear checked" (with undo). New items go to the store you're viewing; suggestions offer a one-tap "+ usual store" when an item normally comes from somewhere else. Changes from other people appear live.
 - **Catalog:** each item has a ranked list of stores (1st, 2nd, 3rd…). Filter by store, or by "Other" to find items that still need one; the filter is remembered.
 - **Recipes:** ingredients have amounts and units, plus directions and an optional link to where the recipe came from. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups, 1 gal + 4 cups = 1¼ gal; US measures).
+- **Meal calendar:** plan lunches and dinners a week at a time. A meal can have several recipes, or be typed in without one (leftovers, eating out). Adding recipes goes straight on to picking their ingredients for your lists, unless you turn that off for a repeat. See [Meal calendar](#meal-calendar).
 - **Cooking:** the recipe page shows the directions as numbered steps. Tap a step to mark it done, and turn on **Keep screen on** so the phone doesn't dim while you cook.
 - **Import a recipe:** from photos of a recipe card or cookbook (ingredients and directions can be in different photos), or from a link to a recipe website. It opens filled in for you to check and save. See [Importing recipes](#importing-recipes).
 - **Works offline:** the lists page and adding recipes to lists keep working without a connection and sync when it's back; other pages open as last seen. See [Offline (website)](#offline-website).
@@ -96,6 +97,16 @@ On a recipe's page, tap **Add details** and use a photo or a link the same way. 
 
 Nothing it already has is changed: the name, existing amounts and existing directions stay as they are. Filled-in parts are marked **Added** or **Amount added**, and nothing is saved until you press **Save**. A photo of just the directions works here. If there's nothing new, the recipe page says so.
 
+## Meal calendar
+
+**Meals** in the top bar shows a week, Sunday to Saturday, with a lunch and a dinner for each day. Use the arrows for other weeks, and **Today** to come back.
+
+- Tap **Add** on a lunch or dinner. Check one or more recipes (search if you have many), type a meal without a recipe, or both.
+- With recipes checked, **Add the ingredients to my lists** (on by default) takes you to the ingredient picker next, with those recipes chosen, to check what you need and pick stores, as when adding recipes to lists. Turn it off for leftovers or a repeat, and the meal is just saved.
+- Tap a recipe on the calendar to open it; **×** removes it from that meal. A recipe that's deleted later stays on past meals by name.
+- **Add this week's ingredients to lists** opens the picker with every recipe planned that week.
+- Changing the calendar needs a connection; it opens as last seen when offline. "Today" follows `TIMEZONE` in `.env` on the website and the phone's own time in the app.
+
 ## Scanning a shopping list
 
 On the lists page, tap the scan button at the left of "Add an item" (it hides while you type). Take a photo of the list, choose photos (up to 4, screenshots work), or paste a list typed in a note or a message. After a few seconds, **Add from your list** shows what was read, one row per item:
@@ -132,6 +143,7 @@ Settings live in `.env` (copy [`.env.example`](.env.example); `.env` stays out o
 | `OLLAMA_MODEL` | `gemma4:26b-a4b-it-qat` | Any Ollama model with vision. |
 | `OLLAMA_TIMEOUT` | `300` | Seconds to wait for an answer. |
 | `OLLAMA_NUM_CTX` | `8192` | Model context size in tokens. Ollama's default of 4096 is too small for four photos plus directions. |
+| `TIMEZONE` | `UTC` | Your time zone, like `America/Denver`, for "today" and "this week" on the meal calendar. |
 | `ANDROID_APP_ID` | `com.example.shoppinglist` | The Android app's id, used when building it. |
 | `ANDROID_SERVER_URL` | empty | Your server's address, filled in on the app's login screen. |
 
@@ -167,6 +179,7 @@ The same pages as the website:
 
 - **Lists:** swipe between stores, check off, add with catalog suggestions (the one-tap "+ usual store", and "Save to catalog" for new things), edit, move, delete, clear checked (with undo), drag to reorder.
 - **Scan a shopping list** from a photo or pasted text, and check the matches and stores before adding, as on the website.
+- **Meals:** the week's lunches and dinners; add recipes or typed meals, and go on to their ingredients (or not, for leftovers), as on the website.
 - **Recipes:** search; new, edit, delete, copy to another household; import from a photo (camera or gallery, up to 4) or a link; **Add details** to fill in what a recipe is missing; read ingredients and directions (tap a step when it's done, keep the screen on); add recipes to the lists with multipliers and a store per ingredient.
 - **Catalog:** filter by store (remembered), search, add, rename, change store rankings, delete.
 - **Settings:** stores (add, rename, reorder, delete), switch or create households, invites, members (roles, password reset, remove), rename, leave or delete; account (change password, log out); sign up.
@@ -218,6 +231,7 @@ The app uses `/api/v1` ([app/routes/api.py](app/routes/api.py)), with a bearer t
 | `POST /h/{id}/catalog`, `PUT/DELETE /h/{id}/catalog/{id}` | Catalog |
 | `POST /h/{id}/recipes`, `PUT/DELETE /h/{id}/recipes/{id}`, `GET …/{id}/draft`, `POST …/{id}/copy` | Recipes |
 | `POST /h/{id}/recipes/scan` (photos), `POST /h/{id}/recipes/import` (link) | Read a recipe into a draft to review; with `recipe_id`, only fill that recipe's gaps |
+| `POST /h/{id}/meals`, `DELETE /h/{id}/meals/{id}` | Meal calendar: `{day, slot: "lunch"/"dinner", recipe_ids, title}` adds recipes and/or a meal without one; the state carries `meals` from a year back |
 | `POST /h/{id}/lists/scan` (`photos`, or `text`) | Read a shopping list into rows to check: `{notice, items: [{name, qty, read_as, catalog_id, ranks, store, on_list}]}` |
 | `POST /h/{id}/lists/add` | `{items: [{name, qty, store}], save_new}`: add them (new things join the catalog when `save_new`); returns `{added, store_id, state}` |
 
@@ -272,7 +286,7 @@ Run the tests (they ignore `.env` and never call a real Ollama server):
 | `app/scan.py` | Asking the Ollama model to read recipes (photos, page text, ingredient lines) |
 | `app/importer.py` | Fetching recipe links (public addresses only) and reading their recipe data |
 | `app/directions.py` | Splitting directions into steps |
-| `app/routes/` | Auth, households, lists (+ live events), stores, catalog, recipes (+ import), plan (the recipe picker page) |
+| `app/routes/` | Auth, households, lists (+ live events), stores, catalog, recipes (+ import), plan (the recipe picker page), meals (the calendar) |
 | `app/templates/`, `app/static/` | Server-rendered pages (Jinja2 + htmx), CSS and JS |
 
 Live updates use Server-Sent Events broadcast in-process, so run a **single** worker. The Docker image already does.

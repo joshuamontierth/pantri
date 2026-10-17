@@ -40,6 +40,9 @@ OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
 # Ollama's default context (4096 tokens) is too small for four photos, a long catalog and the directions.
 OLLAMA_NUM_CTX = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
 
+# The household's time zone, for "today" and "this week" on the meal calendar (the server itself may run on UTC).
+TIMEZONE = os.environ.get("TIMEZONE", "UTC")
+
 SESSION_COOKIE = "session"
 SESSION_DAYS = 365
 MIN_PASSWORD_LENGTH = 8

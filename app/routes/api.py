@@ -25,12 +25,13 @@ from .. import actions, config, importer, quantities, scan, security, services
 from ..db import get_db
 from ..deps import form_data
 from ..events import broker
-from ..models import CatalogItem, Household, Invite, ListItem, Membership, Recipe, RecipeIngredient, Store, SyncOp, User, utcnow
+from ..models import CatalogItem, Household, Invite, ListItem, Meal, Membership, Recipe, RecipeIngredient, Store, SyncOp, User, utcnow
 
 router = APIRouter(prefix="/api/v1")
 
 MAX_OPS = 500
 SYNC_OP_DAYS = 60
+MEAL_DAYS_BACK = 366
 
 
 # ---------- auth ----------
@@ -176,6 +177,11 @@ def household_state(db, household_id):
         .options(selectinload(Recipe.ingredients).selectinload(RecipeIngredient.catalog_item))
         .order_by(Recipe.name).all()
     )
+    # The calendar from a year back on (older weeks aren't worth sending every time).
+    meals = (
+        db.query(Meal).filter(Meal.household_id == household_id, Meal.day >= actions.today() - timedelta(days=MEAL_DAYS_BACK))
+        .order_by(Meal.day, Meal.slot, Meal.position, Meal.id).all()
+    )
     return {
         "household": {"id": household.id, "name": household.name},
         "other_label": services.OTHER_LABEL,
@@ -200,6 +206,10 @@ def household_state(db, household_id):
                 ],
             }
             for r in recipes
+        ],
+        "meals": [
+            {"id": m.id, "day": m.day.isoformat(), "slot": m.slot, "recipe_id": m.recipe_id, "title": m.title, "position": m.position}
+            for m in meals
         ],
     }
 
@@ -614,6 +624,22 @@ def add_scanned(household_id: int, body: dict = Body(...), membership=Depends(ap
     ]
     added, store_id = _act(actions.add_scanned, db, household_id, rows, bool(body.get("save_new")))
     return {"added": added, "store_id": store_id, "state": household_state(db, household_id)}
+
+
+# ---------- the meal calendar (changes need a connection; the calendar is in the state) ----------
+
+@router.post("/h/{household_id}/meals")
+def add_meals(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """{"day": "2026-10-14", "slot": "lunch"|"dinner", "recipe_ids": [...], "title": "Leftovers"}: either or both."""
+    ids = body.get("recipe_ids") if isinstance(body.get("recipe_ids"), list) else []
+    _act(actions.add_meals, db, household_id, body.get("day"), body.get("slot"), ids[:50], str(body.get("title") or ""))
+    return {"state": household_state(db, household_id)}
+
+
+@router.delete("/h/{household_id}/meals/{meal_id}")
+def delete_meal(household_id: int, meal_id: int, membership=Depends(api_member), db: Session = Depends(get_db)):
+    _act(actions.delete_meal, db, household_id, meal_id)
+    return {"state": household_state(db, household_id)}
 
 
 # ---------- households, invites, members (same rules as the website's settings page) ----------

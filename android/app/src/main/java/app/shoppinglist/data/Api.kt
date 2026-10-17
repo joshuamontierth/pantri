@@ -176,6 +176,14 @@ class Api(private val settings: Settings) {
         }
     }
 
+    // ---------- the meal calendar ----------
+
+    /** Recipes and/or a meal without one on a lunch or dinner (day as 2026-10-14). */
+    fun addMeals(hid: Long, day: String, slot: String, recipeIds: List<Long>, title: String) =
+        send("POST", "/h/$hid/meals", obj("day" to day, "slot" to slot, "recipe_ids" to recipeIds, "title" to title), StateResult.serializer())
+
+    fun deleteMeal(hid: Long, id: Long) = send("DELETE", "/h/$hid/meals/$id", null, StateResult.serializer())
+
     // ---------- a shopping list from photos or pasted text ----------
 
     /** Read a shopping list from photos (JPEG bytes, up to 4), or from typed text when there are none. */

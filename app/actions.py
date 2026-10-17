@@ -5,12 +5,14 @@ updates to other devices. A failed check raises ActionError with a message to sh
 """
 
 import re
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func
 
-from . import quantities, scan, security, services
+from . import config, quantities, scan, security, services
 from .events import broker
-from .models import CatalogItem, Household, Invite, ListItem, Membership, Recipe, RecipeIngredient, Store, User
+from .models import CatalogItem, Household, Invite, ListItem, Meal, Membership, Recipe, RecipeIngredient, Store, User
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 
@@ -442,3 +444,71 @@ def add_scanned(db, household_id, rows, save_new):
         broker.publish(household_id, "catalog")
     first = keys[0]
     return len(rows), None if first == services.NO_STORE else int(first)
+
+
+# ---------- the meal calendar: lunch and dinner, a week at a time ----------
+
+MEAL_SLOTS = ("lunch", "dinner")
+MEAL_TITLE_MAX = 150
+
+
+def today():
+    """Today where the household is (TIMEZONE), not where the server's clock is."""
+    try:
+        return datetime.now(ZoneInfo(config.TIMEZONE)).date()
+    except (ZoneInfoNotFoundError, ValueError):
+        return datetime.now().date()
+
+
+def week_start(day):
+    """The Sunday that starts the week with this day in it."""
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+
+def parse_day(value):
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value or "").strip())
+    except ValueError:
+        raise ActionError("That's not a date.")
+
+
+def add_meals(db, household_id, day, slot, recipe_ids, title):
+    """Put recipes and/or a meal without a recipe on a lunch or dinner. Returns the chosen recipes.
+
+    A recipe that's already on that meal isn't added twice (it's still returned, for picking its ingredients).
+    """
+    day = parse_day(day)
+    if slot not in MEAL_SLOTS:
+        raise ActionError("Pick lunch or dinner.")
+    title = (title or "").strip()
+    if len(title) > MEAL_TITLE_MAX:
+        raise ActionError(f"A meal's name can be up to {MEAL_TITLE_MAX} characters.")
+    ids = list(dict.fromkeys(i for i in recipe_ids or [] if isinstance(i, int) and not isinstance(i, bool)))
+    found = {r.id: r for r in db.query(Recipe).filter(Recipe.household_id == household_id, Recipe.id.in_(ids)).all()}
+    if len(found) != len(ids):
+        raise ActionError("That recipe is gone. Someone may have deleted it.", 404)
+    if not ids and not title:
+        raise ActionError("Pick a recipe or type a meal.")
+    there = db.query(Meal).filter_by(household_id=household_id, day=day, slot=slot).all()
+    have = {m.recipe_id for m in there}
+    position = max((m.position for m in there), default=-1) + 1
+    for rid in ids:
+        if rid not in have:
+            db.add(Meal(household_id=household_id, day=day, slot=slot, recipe_id=rid, title=found[rid].name, position=position))
+            position += 1
+    if title:
+        db.add(Meal(household_id=household_id, day=day, slot=slot, title=title, position=position))
+    db.commit()
+    broker.publish(household_id, "meals")
+    return [found[rid] for rid in ids]
+
+
+def delete_meal(db, household_id, meal_id):
+    meal = db.get(Meal, meal_id)
+    if meal is None or meal.household_id != household_id:
+        raise ActionError("That meal is gone. Someone may have removed it.", 404)
+    db.delete(meal)
+    db.commit()
+    broker.publish(household_id, "meals")

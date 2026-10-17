@@ -3,6 +3,8 @@ package app.shoppinglist.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -203,17 +205,20 @@ fun TopNav(current: Screen, status: SyncStatus, onTab: (Screen) -> Unit, onSetti
         Modifier.fillMaxWidth().background(colors.paper).statusBarsPadding().padding(start = 6.dp, end = 4.dp).height(56.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        for ((screen, label) in listOf(Screen.Lists to "Lists", Screen.Recipes to "Recipes", Screen.Catalog to "Catalog")) {
-            val on = current == screen
-            Text(
-                label,
-                Modifier.clip(RoundedCornerShape(8.dp)).clickable { onTab(screen) }.padding(horizontal = 9.dp, vertical = 12.dp),
-                fontSize = 16.sp,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                color = if (on) colors.ink else colors.ink2,
-            )
+        // The tabs scroll sideways if a narrow phone can't fit them next to the status and the gear.
+        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            for ((screen, label) in listOf(Screen.Lists to "Lists", Screen.Meals to "Meals", Screen.Recipes to "Recipes", Screen.Catalog to "Catalog")) {
+                val on = current == screen
+                Text(
+                    label,
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable { onTab(screen) }.padding(horizontal = 8.dp, vertical = 12.dp),
+                    fontSize = 16.sp,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                    color = if (on) colors.ink else colors.ink2,
+                    maxLines = 1,
+                )
+            }
         }
-        Spacer(Modifier.weight(1f))
         StatusPill(status, onSettings)
         IconButton(onClick = onSettings) { Icon(AppIcons.Gear, "Settings", tint = colors.ink2) }
     }

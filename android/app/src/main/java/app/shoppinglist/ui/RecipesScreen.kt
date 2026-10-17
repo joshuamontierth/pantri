@@ -373,7 +373,8 @@ fun PlanScreen(vm: AppViewModel, view: Household, recipeIds: List<Long>, snackba
 
     Scaffold(
         containerColor = colors.paper,
-        topBar = { BackBar("Recipes", onBack = { vm.back() }) },
+        // Opened from the meal calendar, back goes there.
+        topBar = { BackBar(if (vm.stack.getOrNull(vm.stack.lastIndex - 1) == Screen.Meals) "Meals" else "Recipes", onBack = { vm.back() }) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             Box(Modifier.background(colors.paper).navigationBarsPadding().padding(16.dp)) {

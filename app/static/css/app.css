@@ -727,11 +727,52 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
 .scan-meta:not(:has(> :not([hidden]))) { display: none; }
 .read-as { color: var(--ink-2); }
 .scan-row:not(.on) .scan-fields input { color: var(--ink-2); }
-.save-new { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0 2px; cursor: pointer; }
-.save-new > span { display: flex; flex-direction: column; gap: 2px; }
-.save-new > span > span { font-size: 14px; color: var(--ink-2); }
+.save-new, .shop-toggle { display: flex; gap: 14px; align-items: flex-start; padding: 18px 0 2px; cursor: pointer; }
+.save-new > span, .shop-toggle > span { display: flex; flex-direction: column; gap: 2px; }
+.save-new > span > span, .shop-toggle > span > span { font-size: 14px; color: var(--ink-2); }
 @media (min-width: 560px) {
   .scan-row .pick-store { margin-top: 2px; }
+}
+
+/* ---------- meal calendar ---------- */
+.week-nav { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; }
+.week-range { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+.week-range strong { font-size: 18px; font-weight: 800; }
+.week-range span { font-size: 13px; color: var(--ink-2); }
+.day { padding: 14px 0 8px; border-top: 1px solid var(--rule); scroll-margin-top: 12px; }
+.day-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.day-date { font-size: 15px; font-weight: 500; color: var(--ink-2); }
+.day.is-today { border-top: 2px solid var(--accent); }
+.day.is-past .day-name { color: var(--ink-2); }
+.meal-slot { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; align-items: start; padding: 5px 0; }
+.slot-label { padding-top: 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.slot-body { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.meal-items { display: contents; list-style: none; }
+.meal-item {
+  display: inline-flex; align-items: center; max-width: 100%; min-height: 40px; padding-left: 12px;
+  border: 1px solid var(--rule-2); border-radius: 10px; background: var(--field);
+}
+.meal-item.is-recipe { border-color: transparent; background: var(--accent-wash); }
+.meal-name { min-width: 0; padding: 8px 0; font-size: 15px; font-weight: 600; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.meal-item.is-recipe .meal-name { color: var(--accent); }
+.meal-item form { display: contents; }
+.meal-remove {
+  flex: none; width: 36px; height: 40px; display: grid; place-content: center;
+  border: 0; background: none; color: var(--ink-3); cursor: pointer;
+}
+.meal-add {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 12px;
+  border: 1px dashed var(--rule-2); border-radius: 10px; background: none;
+  color: var(--ink-2); font-weight: 600; font-size: 15px; cursor: pointer;
+}
+.meal-add:active, .meal-remove:active { transform: scale(0.95); }
+.meal-sheet .meal-recipes { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+.meal-sheet .row-item { min-height: 52px; }
+.meal-sheet .shop-toggle { padding-top: 4px; }
+.meal-sheet .apply-btn { min-height: 54px; border-radius: 12px; }
+.meal-sheet .apply-main { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 380px) {
+  .mainnav a { padding-left: 7px; padding-right: 7px; }
 }
 
 .sticky-actions {

@@ -215,6 +215,18 @@ data class HouseholdState(
     val items: List<ItemDto> = emptyList(),
     val catalog: List<CatalogDto> = emptyList(),
     val recipes: List<RecipeDto> = emptyList(),
+    val meals: List<MealDto> = emptyList(),
+)
+
+/** One thing on the meal calendar: a recipe (with its name when added), or a meal typed in without one. */
+@Serializable
+data class MealDto(
+    val id: Long,
+    val day: String,
+    val slot: String,
+    @SerialName("recipe_id") val recipeId: Long? = null,
+    val title: String = "",
+    val position: Int = 0,
 )
 
 @Serializable

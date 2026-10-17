@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException
 from . import config, db, security
 from .deps import LoginRequired, RedirectTo, login_url
 from .events import broker
-from .routes import api, auth, catalog, households, lists, plan, recipes, stores
+from .routes import api, auth, catalog, households, lists, meals, plan, recipes, stores
 from .templating import render, templates
 
 
@@ -48,7 +48,7 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 app.add_middleware(SessionCookieRefresh)
 app.mount("/static", StaticFiles(directory=str(config.BASE_DIR / "static")), name="static")
 
-for module in (api, auth, households, lists, stores, catalog, recipes, plan):
+for module in (api, auth, households, lists, stores, catalog, recipes, plan, meals):
     app.include_router(module.router)
 
 

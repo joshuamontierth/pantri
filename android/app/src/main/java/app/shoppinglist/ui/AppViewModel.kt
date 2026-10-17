@@ -43,14 +43,16 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 
 /** Every page of the website has a screen here. */
 sealed interface Screen {
-    // The three top tabs, like the website's header.
+    // The top tabs, like the website's header.
     data object Lists : Screen
+    data object Meals : Screen
     data object Recipes : Screen
     data object Catalog : Screen
 
@@ -610,6 +612,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             else -> message("Share a link to a recipe page, or photos of a recipe.")
         }
+    }
+
+    // ---------- the meal calendar (changes are online, like the website; it reads from the household copy) ----------
+
+    /** The Sunday of the week on screen; null is this week. */
+    var mealsWeek by mutableStateOf<LocalDate?>(null)
+
+    /** Recipes and/or a meal without one on a lunch or dinner. Returns an error, or null when added. */
+    suspend fun addMeals(day: LocalDate, slot: String, recipeIds: List<Long>, title: String): String? =
+        stateAction { api.addMeals(it, day.toString(), slot, recipeIds, title.trim()) }.error()
+
+    fun deleteMeal(id: Long) {
+        viewModelScope.launch { stateAction { api.deleteMeal(it, id) }.error()?.let(::message) }
     }
 
     // ---------- a shopping list from photos or pasted text (online, like the website) ----------

@@ -36,14 +36,17 @@
     p.getAll("r").forEach((x) => x.split(",").forEach((y) => { const n = Number(y); if (n && !ids.includes(n)) ids.push(n); }));
     const mult = {};
     ids.forEach((id) => { if (p.get("m_" + id)) mult[id] = p.get("m_" + id); });
-    return { step: p.get("step") === "pick" ? "pick" : "choose", ids, mult };
+    // Opened from the meal calendar: its back link returns to that week.
+    const back = p.get("back") || "";
+    return { step: p.get("step") === "pick" ? "pick" : "choose", ids, mult, back: back.startsWith("/h/" + hid + "/meals") ? back : "" };
   }
 
-  function hashFor(step, ids, mult) {
+  function hashFor(step, ids, mult, back) {
     const p = new URLSearchParams();
     if (step === "pick") p.set("step", "pick");
     ids.forEach((id) => p.append("r", id));
     ids.forEach((id) => { if (mult[id] && mult[id] !== "1") p.set("m_" + id, mult[id]); });
+    if (back) p.set("back", back);
     return "#" + p.toString();
   }
 
@@ -162,7 +165,8 @@
     if (!list.length) { location.replace("#"); return; }
     const back = hashFor("choose", sel.ids, sel.mult);
     root.innerHTML =
-      '<a class="back-link" href="' + back + '">' + icon("back", 18) + "Recipes</a>" +
+      (sel.back ? '<a class="back-link" href="' + esc(sel.back) + '">' + icon("back", 18) + "Meals</a>"
+        : '<a class="back-link" href="' + back + '">' + icon("back", 18) + "Recipes</a>") +
       '<h1 class="page-title">Choose ingredients</h1>' +
       '<div class="plan-recipes">' + list.map(({ recipe, text }) =>
         '<div class="plan-recipe"><span class="row-title">' + esc(recipe.name) + '</span><div class="plan-scale"><label>× ' +
@@ -199,7 +203,7 @@
     const row = e.target.closest(".pick-row");
     if (e.target.matches(".mult")) {
       current.sel.mult[e.target.dataset.recipe] = e.target.value.trim() || "1";
-      history.replaceState(null, "", hashFor("pick", current.sel.ids, current.sel.mult));
+      history.replaceState(null, "", hashFor("pick", current.sel.ids, current.sel.mult, current.sel.back));
       renderRows();
       return;
     }

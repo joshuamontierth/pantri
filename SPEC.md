@@ -62,6 +62,14 @@
 - Rows show if the item is already on a list (e.g. "already on Costco: 6 each").
 - Confirm → items are added to each store's list, merging per the rules above, tagged with source recipe(s).
 
+## Meal Calendar
+- Weekly view, Sunday to Saturday; previous/next week and back to this week. Each day has two meals: lunch and dinner.
+- A meal holds any number of entries: recipes (a recipe appears at most once per meal) and/or meals typed in without a recipe (up to 150 characters).
+- Adding: pick recipes (searchable) and/or type a meal. With recipes picked, "Add the ingredients to my lists" (on by default) opens the Add Recipe(s) → Lists picker with those recipes chosen and a way back to that week; off (leftovers, a repeat) just saves.
+- Entries link to their recipe and can be removed. A deleted recipe's entries keep its name as text.
+- "Add this week's ingredients to lists" opens the picker with every recipe planned that week.
+- Changes need a connection; the calendar is viewable offline. "Today" uses the household's time zone (TIMEZONE) on the website and the phone's clock in the app.
+
 ## Quantities & Units
 - Units: common list (tsp, tbsp, cup, pt, qt, gal, fl oz, ml, L, oz, lb, g, kg, each; US measures) + free-text custom units (can, bunch, clove…). Quantity is optional (e.g. "salt").
 - Merging converts within a unit type (volume ↔ volume, weight ↔ weight), shown in the existing line's unit. Custom units only merge with the same unit. Incompatible units stay on one line: `2 cups + 1 lb`.
@@ -71,7 +79,7 @@
 - Native client for the same server and accounts; the website stays fully usable.
 - Lists and recipes work offline from a copy kept on the phone. Changes queue on the phone and sync when the server is reachable (also in the background after the app is closed); each change is applied once by the server.
 - Live updates while the app is open.
-- Same features and behavior as the website (accounts, households, members, stores, catalog, recipes with import and add details, adding recipes to lists, scanning a shopping list), backed by the same server code. Sharing a link or photos to the app (or to the installed website) imports a recipe.
+- Same features and behavior as the website (accounts, households, members, stores, catalog, recipes with import and add details, adding recipes to lists, scanning a shopping list, the meal calendar), backed by the same server code. Sharing a link or photos to the app (or to the installed website) imports a recipe.
 
 ## Offline website
 - The lists page works offline from a copy kept in the browser, with the same change queue and sync as the Android app; it syncs when the server is reachable and shows live updates when online.

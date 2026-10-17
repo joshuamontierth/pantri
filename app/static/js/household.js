@@ -319,7 +319,7 @@
       localStorage.setItem(stamp, String(Date.now()));
     } catch (_) { return; }
     const base = "/h/" + hid;
-    const urls = [base + "/recipes", base + "/plan", base + "/catalog", base + "/settings"]
+    const urls = [base + "/meals", base + "/recipes", base + "/plan", base + "/catalog", base + "/settings"]
       .concat(data.state.recipes.map((r) => base + "/recipes/" + r.id));
     ctrl.postMessage({ type: "warm", urls });
   }

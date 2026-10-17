@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -193,6 +194,28 @@ class RecipeIngredient(Base):
 
     recipe: Mapped[Recipe] = relationship(back_populates="ingredients")
     catalog_item: Mapped[CatalogItem] = relationship()
+
+
+class Meal(Base):
+    """One thing on the meal calendar: a recipe, or a meal typed in without one. A lunch or dinner can have several."""
+
+    __tablename__ = "meals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    slot: Mapped[str] = mapped_column(String(10))  # "lunch" | "dinner"
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id", ondelete="SET NULL"), index=True)
+    # The recipe's name when it was added, so the meal still reads right if the recipe is deleted.
+    title: Mapped[str] = mapped_column(String(150), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    recipe: Mapped[Recipe | None] = relationship()
+
+    @property
+    def name(self):
+        return self.recipe.name if self.recipe is not None else self.title
 
 
 class SyncOp(Base):

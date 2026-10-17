@@ -31,8 +31,8 @@ android {
         applicationId = setting("ANDROID_APP_ID", "com.example.shoppinglist")
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         // Filled in on the login screen.
         buildConfigField("String", "SERVER_URL", "\"${setting("ANDROID_SERVER_URL", "")}\"")
     }

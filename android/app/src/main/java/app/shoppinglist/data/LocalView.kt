@@ -28,6 +28,7 @@ data class LocalView(
     val items: List<LocalItem>,
     val catalog: List<CatalogDto>,
     val recipes: List<RecipeDto>,
+    val meals: List<MealDto> = emptyList(),
 ) {
     private val storeNames = stores.associate { it.id to it.name }
     private val catalogByLower = catalog.associateBy { it.name.lowercase() }
@@ -53,6 +54,12 @@ data class LocalView(
 
     /** The catalog item a name means: the same name, or the same but for a plural (services.catalog_matcher). */
     fun matchCatalog(name: String) = catalogItem(name) ?: catalogByKey[nameKey(name)]
+
+    private val recipeNames = recipes.associate { it.id to it.name }
+
+    /** A meal's name: its recipe's name now, or what it was called (a deleted recipe, or no recipe). */
+    fun mealName(meal: MealDto) = meal.recipeId?.let(recipeNames::get) ?: meal.title
+    fun hasRecipe(meal: MealDto) = meal.recipeId != null && meal.recipeId in recipeNames
 
     /** Where an item usually comes from: its first-ranked store that still exists, else Other. */
     fun usualStore(name: String): Long? = catalogItem(name)?.ranks?.firstOrNull { it in storeNames }
@@ -191,6 +198,7 @@ object LocalApply {
             items = items,
             catalog = state.catalog,
             recipes = state.recipes,
+            meals = state.meals,
         )
     }
 

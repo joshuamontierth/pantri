@@ -25,6 +25,7 @@
     {% if household %}
     <nav class="mainnav" aria-label="Sections">
       <a href="/h/{{ household.id }}"{% if nav == 'lists' %} aria-current="page"{% endif %}>Lists</a>
+      <a href="/h/{{ household.id }}/meals"{% if nav == 'meals' %} aria-current="page"{% endif %}>Meals</a>
       <a href="/h/{{ household.id }}/recipes"{% if nav == 'recipes' %} aria-current="page"{% endif %}>Recipes</a>
       <a href="/h/{{ household.id }}/catalog"{% if nav == 'catalog' %} aria-current="page"{% endif %}>Catalog</a>
     </nav>

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% set nav = "meals" %}
+{% block title %}Meals · {{ household.name }}{% endblock %}
+{% block scripts %}
+<script src="/static/js/meals.js?v={{ static_v }}" defer></script>
+{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <h1 class="page-title">Meals</h1>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+
+  <nav class="week-nav" aria-label="Week">
+    <a class="btn small icon-btn" href="{{ prev_url }}" aria-label="Previous week">{{ icon("chevron-left", 20, 2) }}</a>
+    <span class="week-range">
+      <strong>{{ days[0].strftime("%b") }} {{ days[0].day }} – {% if days[6].month != days[0].month %}{{ days[6].strftime("%b") }} {% endif %}{{ days[6].day }}</strong>
+      <span>{{ week_label }}</span>
+    </span>
+    <a class="btn small icon-btn" href="{{ next_url }}" aria-label="Next week">{{ icon("chevron-right", 20, 2) }}</a>
+    {% if not this_week %}<a class="btn small" href="{{ this_url }}">Today</a>{% endif %}
+  </nav>
+
+  {% for day in days %}
+  {% set iso = day.isoformat() %}
+  <section class="day{{ ' is-today' if day == today }}{{ ' is-past' if day < today }}" id="day-{{ iso }}" aria-labelledby="day-{{ iso }}-name">
+    <h2 class="day-head" id="day-{{ iso }}-name">
+      <span class="day-name">{{ day.strftime("%A") }}</span>
+      <span class="day-date">{{ day.strftime("%b") }} {{ day.day }}</span>
+      {% if day == today %}<span class="badge">Today</span>{% endif %}
+    </h2>
+    {% for slot, label in slots.items() %}
+    {% set meals = grid[(day, slot)] %}
+    <div class="meal-slot">
+      <span class="slot-label">{{ label }}</span>
+      <div class="slot-body">
+        {% if meals %}
+        <ul class="meal-items">
+          {% for m in meals %}
+          <li class="meal-item{{ ' is-recipe' if m.recipe }}">
+            {% if m.recipe %}
+            <a class="meal-name is-recipe" href="/h/{{ hid }}/recipes/{{ m.recipe_id }}">{{ m.recipe.name }}</a>
+            {% else %}
+            <span class="meal-name">{{ m.title }}</span>
+            {% endif %}
+            <form method="post" action="/h/{{ hid }}/meals/{{ m.id }}/delete" data-meal-change>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="week" value="{{ week }}">
+              <button class="meal-remove" aria-label="Remove {{ m.name }} from {{ day.strftime('%A') }} {{ label|lower }}">{{ icon("x", 16, 2.2) }}</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <button type="button" class="meal-add" data-meal-add data-day="{{ iso }}" data-slot="{{ slot }}"
+                data-label="{{ day.strftime('%A') }} {{ label|lower }}">{{ icon("plus", 16, 2.4) }}Add</button>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  {% if shop_url %}
+  <a class="btn block mt-lg" href="{{ shop_url }}">{{ icon("list", 18) }}Add this week's ingredients to lists</a>
+  {% endif %}
+</div>
+
+<dialog class="sheet meal-sheet" id="meal-sheet" aria-labelledby="meal-sheet-title">
+  <div class="sheet-grabber" aria-hidden="true"></div>
+  <form method="post" action="/h/{{ hid }}/meals" class="stack" data-meal-change data-meal-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="week" value="{{ week }}">
+    <input type="hidden" name="day" data-meal-day>
+    <input type="hidden" name="slot" data-meal-slot>
+    <h2 class="sheet-title" id="meal-sheet-title">Add to <span data-meal-label>dinner</span></h2>
+    {% if recipes %}
+    <label class="search">{{ icon("search", 18) }}<input type="search" placeholder="Search recipes" data-filter="#meal-recipes" aria-label="Search recipes"></label>
+    <ul class="rows meal-recipes" id="meal-recipes">
+      {% for r in recipes %}
+      <li data-filter-text="{{ r.name|lower }}">
+        <label class="row-item check-row"><input type="checkbox" name="recipe_id" value="{{ r.id }}"><span class="row-title">{{ r.name }}</span></label>
+      </li>
+      {% endfor %}
+    </ul>
+    <label class="shop-toggle" data-meal-shop hidden>
+      <input type="checkbox" class="box" name="shop" value="1" checked>
+      <span><strong>Add the ingredients to my lists</strong><span>Next you'll check what you need. Turn off for leftovers or a repeat.</span></span>
+    </label>
+    {% endif %}
+    <label class="field">
+      <span class="field-label">{{ "Or a meal without a recipe" if recipes else "Meal" }}</span>
+      <input name="title" maxlength="150" placeholder="Leftovers, eating out…" autocomplete="off" autocapitalize="sentences" data-meal-title>
+    </label>
+    <button class="btn primary block apply-btn" data-meal-save><span class="apply-main">Add</span><span class="apply-sub"></span></button>
+    <button type="button" class="btn block" data-meal-cancel>Cancel</button>
+  </form>
+</dialog>
+{% endblock %}

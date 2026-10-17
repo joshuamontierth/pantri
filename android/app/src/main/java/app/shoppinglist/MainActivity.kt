@@ -40,6 +40,7 @@ import app.shoppinglist.ui.ChangePasswordScreen
 import app.shoppinglist.ui.EditorScreen
 import app.shoppinglist.ui.HouseholdsScreen
 import app.shoppinglist.ui.ListsScreen
+import app.shoppinglist.ui.MealsScreen
 import app.shoppinglist.ui.OutlineButton
 import app.shoppinglist.ui.PlanChooseScreen
 import app.shoppinglist.ui.PlanScreen
@@ -177,6 +178,7 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
 
     when (screen) {
         Screen.Lists -> ListsScreen(vm, current, status, snackbar)
+        Screen.Meals -> MealsScreen(vm, current, status, snackbar)
         Screen.Recipes -> RecipesScreen(vm, current, status, snackbar)
         Screen.Catalog -> CatalogScreen(vm, current, status, snackbar)
         is Screen.Recipe -> RecipeScreen(vm, current, screen.id, snackbar)
