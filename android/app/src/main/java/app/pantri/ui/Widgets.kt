@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,7 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.StoreDto
+import app.pantri.data.StoreDto
 
 /** Tap stores in order of preference; tap again to remove (the website's rank picker). */
 @OptIn(ExperimentalLayoutApi::class)

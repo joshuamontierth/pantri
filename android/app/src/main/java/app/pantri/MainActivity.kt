@@ -1,4 +1,4 @@
-package app.shoppinglist
+package app.pantri
 
 import android.content.Intent
 import android.net.Uri
@@ -31,29 +31,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.shoppinglist.data.Connection
-import app.shoppinglist.ui.AccountScreen
-import app.shoppinglist.ui.AppViewModel
-import app.shoppinglist.ui.CatalogEditScreen
-import app.shoppinglist.ui.CatalogScreen
-import app.shoppinglist.ui.ChangePasswordScreen
-import app.shoppinglist.ui.EditorScreen
-import app.shoppinglist.ui.HouseholdsScreen
-import app.shoppinglist.ui.ListsScreen
-import app.shoppinglist.ui.MealsScreen
-import app.shoppinglist.ui.OutlineButton
-import app.shoppinglist.ui.PlanChooseScreen
-import app.shoppinglist.ui.PlanScreen
-import app.shoppinglist.ui.ReadingOverlay
-import app.shoppinglist.ui.RecipeScreen
-import app.shoppinglist.ui.RecipesScreen
-import app.shoppinglist.ui.ScanReviewScreen
-import app.shoppinglist.ui.Screen
-import app.shoppinglist.ui.SettingsScreen
-import app.shoppinglist.ui.SetupScreen
-import app.shoppinglist.ui.ShoppingTheme
-import app.shoppinglist.ui.StoresScreen
-import app.shoppinglist.ui.colors
+import app.pantri.data.Connection
+import app.pantri.ui.AccountScreen
+import app.pantri.ui.AppViewModel
+import app.pantri.ui.CatalogEditScreen
+import app.pantri.ui.CatalogScreen
+import app.pantri.ui.ChangePasswordScreen
+import app.pantri.ui.EditorScreen
+import app.pantri.ui.HouseholdsScreen
+import app.pantri.ui.ListsScreen
+import app.pantri.ui.MealsScreen
+import app.pantri.ui.OutlineButton
+import app.pantri.ui.PlanChooseScreen
+import app.pantri.ui.PlanScreen
+import app.pantri.ui.ReadingOverlay
+import app.pantri.ui.RecipeScreen
+import app.pantri.ui.RecipesScreen
+import app.pantri.ui.ScanReviewScreen
+import app.pantri.ui.Screen
+import app.pantri.ui.SettingsScreen
+import app.pantri.ui.SetupScreen
+import app.pantri.ui.PantriTheme
+import app.pantri.ui.StoresScreen
+import app.pantri.ui.colors
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { ShoppingTheme { AppRoot(vm) } }
+        setContent { PantriTheme { AppRoot(vm) } }
         if (savedInstanceState == null) handleShare(intent)
     }
 

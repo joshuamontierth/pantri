@@ -23,16 +23,16 @@ fun setting(name: String, default: String): String =
     System.getenv(name)?.takeIf { it.isNotBlank() } ?: dotEnv[name]?.takeIf { it.isNotBlank() } ?: default
 
 android {
-    namespace = "app.shoppinglist"
+    namespace = "app.pantri"
     compileSdk = 35
 
     defaultConfig {
         // Keep the same id (and signing key) so a new build installs over the old one.
-        applicationId = setting("ANDROID_APP_ID", "com.example.shoppinglist")
+        applicationId = setting("ANDROID_APP_ID", "com.example.pantri")
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
         // Filled in on the login screen.
         buildConfigField("String", "SERVER_URL", "\"${setting("ANDROID_SERVER_URL", "")}\"")
     }

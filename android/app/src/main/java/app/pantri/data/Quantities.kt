@@ -1,4 +1,4 @@
-package app.shoppinglist.data
+package app.pantri.data
 
 import java.util.Locale
 import kotlin.math.abs

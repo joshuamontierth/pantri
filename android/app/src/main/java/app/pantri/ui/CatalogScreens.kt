@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,9 +43,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.CatalogDto
-import app.shoppinglist.data.LocalView
-import app.shoppinglist.data.SyncStatus
+import app.pantri.data.CatalogDto
+import app.pantri.data.LocalView
+import app.pantri.data.SyncStatus
 import kotlinx.coroutines.launch
 
 private fun matches(c: CatalogDto, filter: String, storeIds: Set<Long>): Boolean {

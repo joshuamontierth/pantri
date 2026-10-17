@@ -1,4 +1,4 @@
-package app.shoppinglist.data
+package app.pantri.data
 
 import android.content.Context
 import androidx.core.util.AtomicFile

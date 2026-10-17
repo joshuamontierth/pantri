@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import android.app.Application
 import android.net.Uri
@@ -8,35 +8,35 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import app.shoppinglist.BuildConfig
-import app.shoppinglist.ShoppingApp
-import app.shoppinglist.data.AddOp
-import app.shoppinglist.data.AddScanned
-import app.shoppinglist.data.AddScannedItem
-import app.shoppinglist.data.ApiException
-import app.shoppinglist.data.CheckOp
-import app.shoppinglist.data.DeleteOp
-import app.shoppinglist.data.EngineEvent
-import app.shoppinglist.data.Household
-import app.shoppinglist.data.HouseholdSettings
-import app.shoppinglist.data.ItemKey
-import app.shoppinglist.data.LocalItem
-import app.shoppinglist.data.LocalView
-import app.shoppinglist.data.LoginResult
-import app.shoppinglist.data.Me
-import app.shoppinglist.data.Op
-import app.shoppinglist.data.Part
-import app.shoppinglist.data.PhotoException
-import app.shoppinglist.data.Photos
-import app.shoppinglist.data.RecipeDraft
-import app.shoppinglist.data.ReorderOp
-import app.shoppinglist.data.SaveIngredient
-import app.shoppinglist.data.SaveRecipe
-import app.shoppinglist.data.ScannedItem
-import app.shoppinglist.data.ScannedList
-import app.shoppinglist.data.StateResult
-import app.shoppinglist.data.UpdateOp
-import app.shoppinglist.data.toJson
+import app.pantri.BuildConfig
+import app.pantri.PantriApp
+import app.pantri.data.AddOp
+import app.pantri.data.AddScanned
+import app.pantri.data.AddScannedItem
+import app.pantri.data.ApiException
+import app.pantri.data.CheckOp
+import app.pantri.data.DeleteOp
+import app.pantri.data.EngineEvent
+import app.pantri.data.Household
+import app.pantri.data.HouseholdSettings
+import app.pantri.data.ItemKey
+import app.pantri.data.LocalItem
+import app.pantri.data.LocalView
+import app.pantri.data.LoginResult
+import app.pantri.data.Me
+import app.pantri.data.Op
+import app.pantri.data.Part
+import app.pantri.data.PhotoException
+import app.pantri.data.Photos
+import app.pantri.data.RecipeDraft
+import app.pantri.data.ReorderOp
+import app.pantri.data.SaveIngredient
+import app.pantri.data.SaveRecipe
+import app.pantri.data.ScannedItem
+import app.pantri.data.ScannedList
+import app.pantri.data.StateResult
+import app.pantri.data.UpdateOp
+import app.pantri.data.toJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -159,10 +159,10 @@ class EditorState(draft: RecipeDraft, knownNames: Set<String>) {
 }
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
-    private val shopping = app as ShoppingApp
-    private val settings = shopping.settings
-    private val engine = shopping.engine
-    private val api = shopping.api
+    private val pantri = app as PantriApp
+    private val settings = pantri.settings
+    private val engine = pantri.engine
+    private val api = pantri.api
 
     val view = engine.view
     val status = engine.status
@@ -310,7 +310,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         val owner = "${result.user.username.lowercase()}@$base"
         if (settings.dataOwner != owner) {
-            shopping.store.clearAll()
+            pantri.store.clearAll()
             settings.householdId = -1
             settings.dataOwner = owner
         }
@@ -357,7 +357,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         engine.close()
         settings.signOut()
         if (!keepData) {
-            shopping.store.clearAll()
+            pantri.store.clearAll()
             settings.householdId = -1
             settings.dataOwner = ""
         }
@@ -761,9 +761,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         /** Your server (ANDROID_SERVER_URL in .env), or an example of what an address looks like. */
-        val EXAMPLE_SERVER: String = BuildConfig.SERVER_URL.ifEmpty { "https://shopping.example.com" }
+        val EXAMPLE_SERVER: String = BuildConfig.SERVER_URL.ifEmpty { "https://pantri.example.com" }
 
-        /** "shopping.example.com" -> "https://shopping.example.com". Null if blank. */
+        /** "pantri.example.com" -> "https://pantri.example.com". Null if blank. */
         fun normalizeServer(input: String): String? {
             var s = input.trim().trimEnd('/')
             if (s.isEmpty()) return null

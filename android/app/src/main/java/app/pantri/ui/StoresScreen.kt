@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,8 +37,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.LocalView
-import app.shoppinglist.data.StoreDto
+import app.pantri.data.LocalView
+import app.pantri.data.StoreDto
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState

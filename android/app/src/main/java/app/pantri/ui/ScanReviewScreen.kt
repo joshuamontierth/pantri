@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,7 +32,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.LocalView
+import app.pantri.data.LocalView
 
 /**
  * "Add from your list" (the website's page after scanning a list): check the items, fix what was

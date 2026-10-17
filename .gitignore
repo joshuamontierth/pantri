@@ -11,3 +11,4 @@ __pycache__/
 # Local settings and notes (see .env.example)
 .env
 *.local.md
+docker-compose.override.yml

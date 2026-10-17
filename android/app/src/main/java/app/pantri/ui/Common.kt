@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
@@ -46,8 +46,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.Connection
-import app.shoppinglist.data.SyncStatus
+import app.pantri.data.Connection
+import app.pantri.data.SyncStatus
 
 val RadiusShape = RoundedCornerShape(10.dp)
 

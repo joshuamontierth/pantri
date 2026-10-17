@@ -213,17 +213,17 @@ def test_android_app_download(make_user, tmp_path, monkeypatch):
 
     alice = make_user("alice")
     hid = alice.create_household()
-    apk = tmp_path / "ShoppingList.apk"
+    apk = tmp_path / "Pantri.apk"
     monkeypatch.setattr(households, "ANDROID_APK", apk)
     assert "Android app" not in alice.get(f"/h/{hid}/settings").text
-    assert alice.get("/android/ShoppingList.apk").status_code == 404
+    assert alice.get("/android/Pantri.apk").status_code == 404
     apk.write_bytes(b"PK fake apk")
     assert "Download the app" in alice.get(f"/h/{hid}/settings").text
-    r = alice.get("/android/ShoppingList.apk")
+    r = alice.get("/android/Pantri.apk")
     assert r.status_code == 200 and r.content == b"PK fake apk"
     assert r.headers["content-type"] == "application/vnd.android.package-archive"
     # Not for strangers.
-    assert TestClient(app, follow_redirects=False).get("/android/ShoppingList.apk").status_code == 303
+    assert TestClient(app, follow_redirects=False).get("/android/Pantri.apk").status_code == 303
 
 
 def test_offline_support_pieces(make_user):
@@ -395,3 +395,5 @@ def test_share_target_lands_on_recipes(make_user):
     assert TestClient(app, follow_redirects=False).get("/share").status_code == 303  # (to the login page)
     manifest = json.loads(TestClient(app).get("/static/manifest.json").text)
     assert manifest["share_target"]["action"] == "/share" and manifest["share_target"]["params"]["files"][0]["name"] == "photos"
+    assert manifest["name"] == manifest["short_name"] == "Pantri"
+    assert "<title>Log in · Pantri</title>" in TestClient(app).get("/login").text

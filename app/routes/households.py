@@ -134,14 +134,14 @@ def _settings_page(request, db, membership, error=None, notice=None, status_code
 
 
 # Put a built app here (see README, "Android app") to offer it on the settings page.
-ANDROID_APK = config.DATA_DIR / "ShoppingList.apk"
+ANDROID_APK = config.DATA_DIR / "Pantri.apk"
 
 
-@router.get("/android/ShoppingList.apk")
+@router.get("/android/Pantri.apk")
 def android_apk(user=Depends(current_user)):
     if not ANDROID_APK.exists():
         raise HTTPException(404, "The Android app hasn't been put on this server.")
-    return FileResponse(ANDROID_APK, media_type="application/vnd.android.package-archive", filename="ShoppingList.apk")
+    return FileResponse(ANDROID_APK, media_type="application/vnd.android.package-archive", filename="Pantri.apk")
 
 
 @router.get("/h/{household_id}/settings")

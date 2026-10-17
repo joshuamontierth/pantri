@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,9 +52,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.BuildConfig
-import app.shoppinglist.data.Connection
-import app.shoppinglist.data.SyncStatus
+import app.pantri.BuildConfig
+import app.pantri.data.Connection
+import app.pantri.data.SyncStatus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -86,7 +86,7 @@ fun SetupScreen(vm: AppViewModel) {
             Modifier.widthIn(max = 460.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Shopping List", color = colors.ink2, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Pantri", color = colors.ink2, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             PageTitle(if (signingUp) "Create an account" else "Log in")
             if (!signingUp) {
                 Text("Your lists are kept on this phone too, so they work without a connection.", color = colors.ink2, fontSize = 16.sp, lineHeight = 23.sp)

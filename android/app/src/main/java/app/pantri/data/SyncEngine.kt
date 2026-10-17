@@ -1,4 +1,4 @@
-package app.shoppinglist.data
+package app.pantri.data
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -11,7 +11,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import app.shoppinglist.ShoppingApp
+import app.pantri.PantriApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -387,7 +387,7 @@ class SyncEngine(
 /** Sends queued changes after the app is closed, once there's a network. */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val engine = (applicationContext as ShoppingApp).engine
+        val engine = (applicationContext as PantriApp).engine
         return if (engine.syncFromBackground()) Result.success() else Result.retry()
     }
 }

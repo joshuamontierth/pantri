@@ -1,12 +1,12 @@
 services:
-  shopping:
+  pantri:
     build: .
-    container_name: shopping-list
+    container_name: pantri
     restart: unless-stopped
     ports:
       - "${PORT:-8000}:8000"
     volumes:
-      - shopping-data:/data
+      - pantri-data:/data
     # Settings come from .env next to this file (copy .env.example); see the README's Configuration.
     environment:
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
@@ -17,4 +17,4 @@ services:
       TIMEZONE: "${TIMEZONE:-UTC}"
 
 volumes:
-  shopping-data:
+  pantri-data:

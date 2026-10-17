@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -70,10 +70,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.Connection
-import app.shoppinglist.data.LocalItem
-import app.shoppinglist.data.LocalView
-import app.shoppinglist.data.SyncStatus
+import app.pantri.data.Connection
+import app.pantri.data.LocalItem
+import app.pantri.data.LocalView
+import app.pantri.data.SyncStatus
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState

@@ -1,4 +1,4 @@
-# Shopping List Server: Spec
+# Pantri: Spec
 
 ## Platform
 - **Stack:** Python (FastAPI) + SQLite, server-rendered pages (Jinja2 + HTMX), light JS for drag-and-drop and swipe tabs.

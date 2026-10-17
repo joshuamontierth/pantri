@@ -27,7 +27,7 @@ def _load_env_file():
 _load_env_file()
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR.parent / "data"))
-DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", DATA_DIR / "shopping.db"))
+DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", DATA_DIR / "pantri.db"))
 
 # Set COOKIE_SECURE=true when the site is served over HTTPS (e.g. behind a TLS reverse proxy).
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")

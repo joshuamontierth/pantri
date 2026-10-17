@@ -10,9 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
-RUN useradd --system --uid 10001 shopping \
-    && mkdir -p /data && chown shopping /data
-USER shopping
+RUN useradd --system --uid 10001 pantri \
+    && mkdir -p /data && chown pantri /data
+USER pantri
 VOLUME /data
 EXPOSE 8000
 

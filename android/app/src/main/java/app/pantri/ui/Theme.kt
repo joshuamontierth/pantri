@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import app.shoppinglist.R
+import app.pantri.R
 
 /** The website's "notepad & ballpoint" tokens (app/static/css/app.css). */
 @Immutable
@@ -87,7 +87,7 @@ private fun Typography.withFont(family: FontFamily): Typography {
 }
 
 @Composable
-fun ShoppingTheme(content: @Composable () -> Unit) {
+fun PantriTheme(content: @Composable () -> Unit) {
     val c = if (isSystemInDarkTheme()) DarkColors else LightColors
     val scheme = if (c.dark) {
         darkColorScheme(

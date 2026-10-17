@@ -1,10 +1,10 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
-import app.shoppinglist.data.Household
-import app.shoppinglist.data.HouseholdState
-import app.shoppinglist.data.LocalApply
-import app.shoppinglist.data.MealDto
-import app.shoppinglist.data.RecipeDto
+import app.pantri.data.Household
+import app.pantri.data.HouseholdState
+import app.pantri.data.LocalApply
+import app.pantri.data.MealDto
+import app.pantri.data.RecipeDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

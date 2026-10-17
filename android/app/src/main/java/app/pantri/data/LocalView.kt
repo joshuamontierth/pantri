@@ -1,4 +1,4 @@
-package app.shoppinglist.data
+package app.pantri.data
 
 /** A list item as the phone shows it: from the server, possibly changed by queued ops (pending). */
 data class LocalItem(

@@ -1,6 +1,6 @@
-# Shopping List
+# Pantri
 
-A self-hosted, mobile-first shopping list server for a household. Each store has its own list, recipes know which stores you buy each ingredient at, and adding recipes drops the ingredients onto the right lists. See [SPEC.md](SPEC.md) for the full feature spec.
+Pantri is a self-hosted, mobile-first shopping list and meal planner for a household. Each store has its own list, recipes know which stores you buy each ingredient at, and adding recipes drops the ingredients onto the right lists. See [SPEC.md](SPEC.md) for the full feature spec.
 
 - **Households:** shared groups of lists. Invite people by username. A household can have several admins, and you can belong to more than one household. The gear in the top bar opens settings, including switching households.
 - **Stores and lists:** one list per store, plus an "Other" list for items without a store. Swipe between stores. Drag to reorder, tap to check off, then "Clear checked" (with undo). New items go to the store you're viewing; suggestions offer a one-tap "+ usual store" when an item normally comes from somewhere else. Changes from other people appear live.
@@ -28,7 +28,7 @@ docker compose up -d --build
 
 Open `http://<server-ip>:8000`, sign up, create a household, and add your stores.
 
-- Data lives in the `shopping-data` Docker volume as a single SQLite database (`/data/shopping.db`).
+- Data lives in the `pantri-data` Docker volume as a single SQLite database (`/data/pantri.db`).
 - To reach it away from home, put it behind something like Tailscale or a reverse proxy.
 - `COOKIE_SECURE=true` in `.env` limits logins to HTTPS. Leave it `false` if you also use a plain `http://` address, or logging in there will stop working.
 - Sign-up is open to anyone who can reach the server, so don't expose it to the open internet without a proxy or VPN in front.
@@ -44,11 +44,11 @@ Tables are created automatically on start, and new columns are added to existing
 ### Backups
 
 ```bash
-docker compose exec shopping python -c "import sqlite3; s=sqlite3.connect('/data/shopping.db'); d=sqlite3.connect('/data/backup.db'); s.backup(d); d.close()"
+docker compose exec pantri python -c "import sqlite3; s=sqlite3.connect('/data/pantri.db'); d=sqlite3.connect('/data/backup.db'); s.backup(d); d.close()"
 ```
 
 ```bash
-docker compose cp shopping:/data/backup.db ./shopping-backup.db
+docker compose cp pantri:/data/backup.db ./pantri-backup.db
 ```
 
 ### HTTPS with Tailscale (optional)
@@ -144,7 +144,7 @@ Settings live in `.env` (copy [`.env.example`](.env.example); `.env` stays out o
 | `OLLAMA_TIMEOUT` | `300` | Seconds to wait for an answer. |
 | `OLLAMA_NUM_CTX` | `8192` | Model context size in tokens. Ollama's default of 4096 is too small for four photos plus directions. |
 | `TIMEZONE` | `UTC` | Your time zone, like `America/Denver`, for "today" and "this week" on the meal calendar. |
-| `ANDROID_APP_ID` | `com.example.shoppinglist` | The Android app's id, used when building it. |
+| `ANDROID_APP_ID` | `com.example.pantri` | The Android app's id, used when building it. |
 | `ANDROID_SERVER_URL` | empty | Your server's address, filled in on the app's login screen. |
 
 The server running the app has to be able to reach `OLLAMA_URL`. If it can't, importing from photos shows an error, links fall back to simpler parsing, and recipes can still be typed in by hand.
@@ -169,7 +169,7 @@ A native app (Kotlin + Jetpack Compose) in [`android/`](android/). It does every
 ### Install
 
 - **From the website:** gear → **Android app** → **Download the app**, on the phone. The section only appears once the APK has been put on the server (below). Android asks once to allow installs from your browser.
-- **Over USB:** `adb install -r android/dist/ShoppingList.apk`
+- **Over USB:** `adb install -r android/dist/Pantri.apk`
 
 Open it and log in with your server's address (filled in for you when the app was built with `ANDROID_SERVER_URL`), your username and password. The phone has to be able to reach the server, just like the website (for example, with Tailscale on).
 
@@ -183,7 +183,7 @@ The same pages as the website:
 - **Recipes:** search; new, edit, delete, copy to another household; import from a photo (camera or gallery, up to 4) or a link; **Add details** to fill in what a recipe is missing; read ingredients and directions (tap a step when it's done, keep the screen on); add recipes to the lists with multipliers and a store per ingredient.
 - **Catalog:** filter by store (remembered), search, add, rename, change store rankings, delete.
 - **Settings:** stores (add, rename, reorder, delete), switch or create households, invites, members (roles, password reset, remove), rename, leave or delete; account (change password, log out); sign up.
-- **Share to the app:** share a recipe page from Chrome, or recipe photos from Photos, and pick Shopping List; it opens in the editor to check and save.
+- **Share to the app:** share a recipe page from Chrome, or recipe photos from Photos, and pick Pantri; it opens in the editor to check and save.
 
 What works offline is the same as on the website: lists and adding recipes to lists fully, everything else read-only; saving recipes, imports and settings changes need a connection.
 
@@ -202,14 +202,14 @@ Needs the Android SDK (`android/local.properties` points at it) and JDK 17+. The
 cd android && ./gradlew testDebugUnitTest assembleRelease
 ```
 
-The signed APK is `android/app/build/outputs/apk/release/app-release.apk`; copy it to `android/dist/ShoppingList.apk`. Release signing reads `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`), which with `release.keystore` stays out of git: back both up, because updates must be signed with the same key. Without it the build falls back to the debug key.
+The signed APK is `android/app/build/outputs/apk/release/app-release.apk`; copy it to `android/dist/Pantri.apk`. Release signing reads `android/keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`), which with `release.keystore` stays out of git: back both up, because updates must be signed with the same key. Without it the build falls back to the debug key.
 
 ### Put it on the server
 
-Copy `android/dist/ShoppingList.apk` to the server, then from the folder with `docker-compose.yml` there:
+Copy `android/dist/Pantri.apk` to the server, then from the folder with `docker-compose.yml` there:
 
 ```bash
-docker compose cp ShoppingList.apk shopping:/data/ShoppingList.apk
+docker compose cp Pantri.apk pantri:/data/Pantri.apk
 ```
 
 It lives in the data volume, so it survives rebuilds. Bump `versionCode` in `android/app/build.gradle.kts` for each new version.

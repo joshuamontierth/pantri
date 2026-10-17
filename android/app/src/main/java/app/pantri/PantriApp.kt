@@ -1,15 +1,15 @@
-package app.shoppinglist
+package app.pantri
 
 import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import app.shoppinglist.data.Api
-import app.shoppinglist.data.LocalStore
-import app.shoppinglist.data.Settings
-import app.shoppinglist.data.SyncEngine
+import app.pantri.data.Api
+import app.pantri.data.LocalStore
+import app.pantri.data.Settings
+import app.pantri.data.SyncEngine
 
-class ShoppingApp : Application() {
+class PantriApp : Application() {
     lateinit var settings: Settings
     lateinit var api: Api
     lateinit var store: LocalStore

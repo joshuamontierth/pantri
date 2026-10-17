@@ -1,4 +1,4 @@
-package app.shoppinglist.data
+package app.pantri.data
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonArray

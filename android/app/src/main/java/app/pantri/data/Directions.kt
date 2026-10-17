@@ -1,4 +1,4 @@
-package app.shoppinglist.data
+package app.pantri.data
 
 /** Splits recipe directions into steps, the same way the website does (app/directions.py). */
 object Directions {

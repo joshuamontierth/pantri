@@ -1,4 +1,4 @@
-package app.shoppinglist.ui
+package app.pantri.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,14 +58,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.shoppinglist.data.Directions
-import app.shoppinglist.data.Part
-import app.shoppinglist.data.Quantities
-import app.shoppinglist.data.RecipeDto
-import app.shoppinglist.data.SyncStatus
+import app.pantri.data.Directions
+import app.pantri.data.Part
+import app.pantri.data.Quantities
+import app.pantri.data.RecipeDto
+import app.pantri.data.SyncStatus
 import kotlinx.coroutines.launch
 import java.net.URI
-import app.shoppinglist.data.LocalView as Household
+import app.pantri.data.LocalView as Household
 
 /** The website's recipes page. */
 @Composable

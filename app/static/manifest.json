@@ -1,6 +1,6 @@
 {
-  "name": "Shopping List",
-  "short_name": "Shopping",
+  "name": "Pantri",
+  "short_name": "Pantri",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
