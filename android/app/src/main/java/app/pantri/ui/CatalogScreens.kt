@@ -22,6 +22,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -80,6 +84,11 @@ fun CatalogScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackba
                     PrimaryButton("New item", onClick = { vm.go(Screen.CatalogEdit(null)) })
                 }
                 Text("Every item and the stores you buy it at, in order of preference.", Modifier.padding(top = 10.dp, bottom = 14.dp), color = colors.ink2, fontSize = 16.sp)
+                if (view.catalog.size > 1) {
+                    OutlineButton("Find duplicates", small = true, icon = AppIcons.Search, onClick = {
+                        if (status.connection == app.pantri.data.Connection.Offline) vm.message("That needs a connection.") else vm.findDuplicates()
+                    }, modifier = Modifier.padding(bottom = 14.dp))
+                }
                 if (view.catalog.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for ((key, label) in filters) {
@@ -131,8 +140,9 @@ fun CatalogScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackba
 @Composable
 fun CatalogEditScreen(vm: AppViewModel, view: LocalView, itemId: Long?, startName: String, snackbar: SnackbarHostState) {
     val item = itemId?.let { view.catalogById[it] }
-    var name by rememberSaveable(itemId) { mutableStateOf(item?.name ?: startName) }
-    var ranks by remember(itemId) { mutableStateOf(item?.ranks?.filter { r -> view.stores.any { it.id == r } }.orEmpty()) }
+    var name by rememberSaveable(itemId, item?.name) { mutableStateOf(item?.name ?: startName) }
+    var ranks by remember(itemId, item?.ranks) { mutableStateOf(item?.ranks?.filter { r -> view.stores.any { it.id == r } }.orEmpty()) }
+    var merging by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -185,7 +195,17 @@ fun CatalogEditScreen(vm: AppViewModel, view: LocalView, itemId: Long?, startNam
                 } else {
                     OutlineButton("Delete item", danger = true, small = true, onClick = { confirmDelete = true }, modifier = Modifier.padding(top = 12.dp))
                 }
+                if (view.catalog.size > 1) {
+                    OutlineButton("Merge with another item…", small = true, onClick = { merging = true })
+                }
             }
+        }
+    }
+    if (merging && item != null) {
+        MergeSheet(vm, view, item, onDismiss = { merging = false }) { kept ->
+            merging = false
+            if (kept != item.id) vm.replace(Screen.CatalogEdit(kept))
+            vm.message("Merged. Recipes and lists that used the other item use this one now.")
         }
     }
     if (confirmDelete && item != null) {
@@ -195,5 +215,72 @@ fun CatalogEditScreen(vm: AppViewModel, view: LocalView, itemId: Long?, startNam
                 if (error == null) vm.back()
             }
         })
+    }
+}
+
+
+/** Merge this item with another (the website's "Merge with another item"): pick it, and whose name stays. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MergeSheet(vm: AppViewModel, view: LocalView, item: CatalogDto, onDismiss: () -> Unit, onMerged: (Long) -> Unit) {
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var other by remember { mutableStateOf<CatalogDto?>(null) }
+    var keepThis by remember { mutableStateOf(true) }
+    var confirm by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val others = view.catalog.filter { it.id != item.id && (query.isBlank() || it.name.contains(query.trim(), ignoreCase = true)) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = colors.sheet) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Merge ${item.name}", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink)
+            Text(
+                "For the same thing saved twice, like Avocado and Avocados. Recipes and lists that use either one will use the one you keep, with its stores first.",
+                color = colors.ink2, fontSize = 14.sp,
+            )
+            error?.let { Alert(it) }
+            Field(query, { query = it }, placeholder = "Search ${view.catalog.size - 1} items", keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search))
+            Column(Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                HorizontalDivider(color = colors.rule)
+                for (c in others) {
+                    Row(Modifier.fillMaxWidth().clickable { other = c }.heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioDot(other?.id == c.id, { other = c })
+                        Text(c.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
+                    }
+                    HorizontalDivider(color = colors.rule)
+                }
+            }
+            other?.let { o ->
+                SectionLabel("Keep the name")
+                for ((label, value) in listOf(item.name to true, o.name to false)) {
+                    Row(Modifier.fillMaxWidth().clickable { keepThis = value }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioDot(keepThis == value, { keepThis = value })
+                        Text(label, fontSize = 16.sp, color = colors.ink)
+                    }
+                }
+            }
+            PrimaryButton(
+                other?.let { "Merge into “${if (keepThis) item.name else it.name}”" } ?: "Pick an item to merge with",
+                enabled = other != null && !busy, busy = busy, modifier = Modifier.fillMaxWidth(),
+                onClick = { confirm = true },
+            )
+            OutlineButton("Cancel", onClick = onDismiss, modifier = Modifier.fillMaxWidth())
+        }
+    }
+    val o = other
+    if (confirm && o != null) {
+        val (keep, gone) = if (keepThis) item to o else o to item
+        Confirm("Merge ${gone.name} into ${keep.name}? Recipes and lists will use ${keep.name}, and ${gone.name} is removed.", "Merge", danger = false,
+            onDismiss = { confirm = false },
+            onConfirm = {
+                busy = true
+                scope.launch {
+                    error = vm.mergeCatalog(keep.id, listOf(gone.id))
+                    busy = false
+                    if (error == null) onMerged(keep.id)
+                }
+            })
     }
 }

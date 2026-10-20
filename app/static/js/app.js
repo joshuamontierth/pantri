@@ -345,6 +345,12 @@
       }
     });
   });
+  // Other slow forms (Find duplicates) put the reading card up too, and need a connection.
+  document.addEventListener("submit", (e) => {
+    if (!e.target.matches("[data-shows-reading]") || e.defaultPrevented) return;
+    if (!navigator.onLine) { e.preventDefault(); toast("That needs a connection.", true); return; }
+    showReading();
+  });
   document.addEventListener("submit", (e) => {
     if (!e.target.matches("[data-link-form]") || e.defaultPrevented) return;
     document.querySelectorAll(".scan-sheet[open]").forEach((d) => d.close());

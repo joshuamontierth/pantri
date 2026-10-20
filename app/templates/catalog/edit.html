@@ -8,6 +8,7 @@
   <a class="back-link" href="{{ back }}">{{ icon("chevron-left", 18) }}Back</a>
   <h1 class="page-title">{{ item.name if item else "New item" }}</h1>
   {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert success">{{ notice }}</p>{% endif %}
   <form method="post" action="/h/{{ hid }}/catalog{{ '/' ~ item.id if item }}" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="next" value="{{ next }}">
@@ -35,6 +36,30 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button class="btn small danger">Delete item</button>
   </form>
+  {% endif %}
+
+  {% if others %}
+  <details class="merge-box mt-lg">
+    <summary class="btn small">Merge with another item…</summary>
+    <form method="post" action="/h/{{ hid }}/catalog/{{ item.id }}/merge" class="stack mt"
+          data-confirm="Merge these two items? Recipes and lists will use the one you keep, and the other is removed.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <p class="field-hint">For the same thing saved twice, like Avocado and Avocados. Recipes and lists that use either one will use the one you keep, with its stores first.</p>
+      <label class="field">
+        <span class="field-label">Merge with</span>
+        <select name="with" required>
+          <option value="">Pick an item</option>
+          {% for c in others %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <fieldset class="field">
+        <legend class="field-label">Keep the name</legend>
+        <label class="radio-line"><input type="radio" class="radio" name="keep" value="this" checked> {{ item.name }}</label>
+        <label class="radio-line"><input type="radio" class="radio" name="keep" value="other"> The other item's</label>
+      </fieldset>
+      <button class="btn">Merge</button>
+    </form>
+  </details>
   {% endif %}
   {% endif %}
 </div>

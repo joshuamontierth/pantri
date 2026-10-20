@@ -53,6 +53,18 @@
     const button = e.target.querySelector("button:not([type=button])");
     setTimeout(() => { if (button) button.disabled = true; }, 0);
   });
+  // Items added from here go through the lists' change queue: send any still waiting, and say what was added.
+  if (window.Household && document.body.dataset.user) {
+    window.Household({ hid: Number(document.body.dataset.household), user: document.body.dataset.user }).sync();
+  }
+  try {
+    const said = sessionStorage.getItem("sl:toast");
+    if (said) {
+      sessionStorage.removeItem("sl:toast");
+      setTimeout(() => window.App && window.App.toast(said), 200);
+    }
+  } catch (_) { /* storage blocked */ }
+
   // Back here with the browser's back button: the buttons work again.
   window.addEventListener("pageshow", () => document.querySelectorAll("[data-meal-change] button").forEach((b) => { b.disabled = false; }));
 })();

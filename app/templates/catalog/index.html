@@ -9,6 +9,19 @@
     <a class="btn small primary" href="/h/{{ hid }}/catalog/new">{{ icon("plus", 18, 2.2) }}New item</a>
   </div>
   <p class="lede">Every item and the stores you buy it at, in order of preference.</p>
+  {% if total > 1 %}
+  <form method="post" action="/h/{{ hid }}/catalog/duplicates" class="dupe-find" data-shows-reading>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn small">{{ icon("search", 17) }}Find duplicates</button>
+  </form>
+  <div class="scan-overlay" role="status" aria-live="polite" hidden>
+    <div class="scan-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <p class="state-title">Looking for duplicates</p>
+      <p class="state-text">{{ "This can take a little while for a big catalog." if uses_model else "Checking for plurals." }}</p>
+    </div>
+  </div>
+  {% endif %}
 
   {% if total %}
   <nav class="filter-chips" aria-label="Filter by store">

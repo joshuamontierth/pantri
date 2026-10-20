@@ -386,9 +386,14 @@ fun PlanScreen(vm: AppViewModel, view: Household, recipeIds: List<Long>, snackba
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
                         vm.addFromRecipes(picked.map { PlanAdd(it.name, it.parts, storeFor(it), it.tags) })
-                        // Like the website: on to the lists, open at the first store something went to.
-                        vm.setListPage(view.listIds.indexOf(storeFor(picked.first())).coerceAtLeast(0))
-                        vm.tab(Screen.Lists)
+                        if (vm.stack.first() == Screen.Meals) {
+                            // Started from the meal calendar: back to the week you were on (vm.mealsWeek).
+                            vm.tab(Screen.Meals)
+                        } else {
+                            // Like the website: on to the lists, open at the first store something went to.
+                            vm.setListPage(view.listIds.indexOf(storeFor(picked.first())).coerceAtLeast(0))
+                            vm.tab(Screen.Lists)
+                        }
                     },
                 )
             }

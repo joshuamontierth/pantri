@@ -146,6 +146,13 @@ class Api(private val settings: Settings) {
         send("PUT", "/h/$hid/catalog/$id", obj("name" to name, "ranks" to ranks), StateResult.serializer())
     fun deleteCatalogItem(hid: Long, id: Long) = send("DELETE", "/h/$hid/catalog/$id", null, StateResult.serializer())
 
+    /** Recipes and lists use the kept item; the others are removed. The answer's id is the kept item. */
+    fun mergeCatalog(hid: Long, keep: Long, ids: List<Long>) =
+        send("POST", "/h/$hid/catalog/merge", obj("keep_id" to keep, "merge_ids" to ids), StateResult.serializer())
+
+    /** Items that look like the same product (plurals; more with the model, so it can take a while). */
+    fun findDuplicates(hid: Long) = send("POST", "/h/$hid/catalog/duplicates", null, DuplicatesResult.serializer(), slowHttp)
+
     // ---------- recipes ----------
 
     fun recipeDraft(hid: Long, id: Long) = send("GET", "/h/$hid/recipes/$id/draft", null, RecipeDraft.serializer())

@@ -4,7 +4,7 @@ Pantri is a self-hosted, mobile-first shopping list and meal planner for a house
 
 - **Households:** shared groups of lists. Invite people by username. A household can have several admins, and you can belong to more than one household. The gear in the top bar opens settings, including switching households.
 - **Stores and lists:** one list per store, plus an "Other" list for items without a store. Swipe between stores. Drag to reorder, tap to check off, then "Clear checked" (with undo). New items go to the store you're viewing; suggestions offer a one-tap "+ usual store" when an item normally comes from somewhere else. Changes from other people appear live.
-- **Catalog:** each item has a ranked list of stores (1st, 2nd, 3rd…). Filter by store, or by "Other" to find items that still need one; the filter is remembered.
+- **Catalog:** each item has a ranked list of stores (1st, 2nd, 3rd…). Filter by store, or by "Other" to find items that still need one; the filter is remembered. Merge two items that are the same thing, or let **Find duplicates** suggest them. See [Merging and duplicates](#merging-and-duplicates).
 - **Recipes:** ingredients have amounts and units, plus directions and an optional link to where the recipe came from. Pick one or more recipes, scale them with a multiplier, check the ingredients you need, and choose a store for each. They're added to those lists and merged with what's already there (1 cup + 4 tbsp = 1¼ cups, 1 gal + 4 cups = 1¼ gal; US measures).
 - **Meal calendar:** plan lunches and dinners a week at a time. A meal can have several recipes, or be typed in without one (leftovers, eating out). Adding recipes goes straight on to picking their ingredients for your lists, unless you turn that off for a repeat. See [Meal calendar](#meal-calendar).
 - **Cooking:** the recipe page shows the directions as numbered steps. Tap a step to mark it done, and turn on **Keep screen on** so the phone doesn't dim while you cook.
@@ -105,7 +105,15 @@ Nothing it already has is changed: the name, existing amounts and existing direc
 - With recipes checked, **Add the ingredients to my lists** (on by default) takes you to the ingredient picker next, with those recipes chosen, to check what you need and pick stores, as when adding recipes to lists. Turn it off for leftovers or a repeat, and the meal is just saved.
 - Tap a recipe on the calendar to open it; **×** removes it from that meal. A recipe that's deleted later stays on past meals by name.
 - **Add this week's ingredients to lists** opens the picker with every recipe planned that week.
+- After adding ingredients from the calendar, you're back on the week you were looking at (not the lists).
 - Changing the calendar needs a connection; it opens as last seen when offline. "Today" follows `TIMEZONE` in `.env` on the website and the phone's own time in the app.
+
+## Merging and duplicates
+
+The same thing can end up in the catalog twice, like Avocado and Avocados, or Scallions and Green onions.
+
+- **Merge with another item** on an item's page: pick the other item and whose name to keep. Recipes and lists that used either one use the kept item, with its stores first and the other's after. A recipe that had both gets one row, with the amounts added when they can be (2 cups and 1 lb stay separate). Lines on the same list merge.
+- **Find duplicates** on the catalog page looks for items that are the same product: names that differ only by a plural always, and with a model set up, other names, misspellings and abbreviations too (different kinds, like cake flour and flour, stay apart). Then go through them one at a time: pick the name to keep and **Merge**, or **Not the same**. Each group shows each item's stores, how many recipes use it, and whether it's on a list, and the item to keep starts at the one more recipes use. In a group of three or more, uncheck any that don't belong.
 
 ## Scanning a shopping list
 
@@ -229,6 +237,7 @@ The app uses `/api/v1` ([app/routes/api.py](app/routes/api.py)), with a bearer t
 | `GET /h/{id}/settings`, `POST /h/{id}/rename`, `…/invites`, `…/members/{id}/role`, `…/reset-password`, `DELETE …/members/{id}`, `POST /h/{id}/leave`, `…/delete` | The settings page |
 | `POST /h/{id}/stores`, `PUT/DELETE /h/{id}/stores/{id}`, `POST /h/{id}/stores/reorder` | Stores |
 | `POST /h/{id}/catalog`, `PUT/DELETE /h/{id}/catalog/{id}` | Catalog |
+| `POST /h/{id}/catalog/merge`, `POST /h/{id}/catalog/duplicates` | Merge items (`{keep_id, merge_ids}`); find possible duplicates (`{groups: [{items: [{id, name, stores, recipes, on_list}], keep, reason}]}`) |
 | `POST /h/{id}/recipes`, `PUT/DELETE /h/{id}/recipes/{id}`, `GET …/{id}/draft`, `POST …/{id}/copy` | Recipes |
 | `POST /h/{id}/recipes/scan` (photos), `POST /h/{id}/recipes/import` (link) | Read a recipe into a draft to review; with `recipe_id`, only fill that recipe's gaps |
 | `POST /h/{id}/meals`, `DELETE /h/{id}/meals/{id}` | Meal calendar: `{day, slot: "lunch"/"dinner", recipe_ids, title}` adds recipes and/or a meal without one; the state carries `meals` from a year back |

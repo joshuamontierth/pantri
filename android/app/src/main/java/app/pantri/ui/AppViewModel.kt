@@ -16,6 +16,7 @@ import app.pantri.data.AddScannedItem
 import app.pantri.data.ApiException
 import app.pantri.data.CheckOp
 import app.pantri.data.DeleteOp
+import app.pantri.data.DuplicatesResult
 import app.pantri.data.EngineEvent
 import app.pantri.data.Household
 import app.pantri.data.HouseholdSettings
@@ -61,6 +62,7 @@ sealed interface Screen {
     data class Plan(val recipeIds: List<Long>) : Screen
     data object Editor : Screen // the recipe being edited is AppViewModel.editor
     data object ScanReview : Screen // what was read from a shopping list is AppViewModel.scanReview
+    data object Duplicates : Screen // the groups being gone through are AppViewModel.duplicates
     data class CatalogEdit(val itemId: Long?, val name: String = "") : Screen
     data object Stores : Screen
     data object Settings : Screen
@@ -139,6 +141,27 @@ class ScanReview(list: ScannedList) {
     var saveNew by mutableStateOf(true)
     var adding by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
+}
+
+/** Going through possible duplicates (the website's page): one group at a time, merge or not. */
+class DuplicatesReview(result: DuplicatesResult) {
+    val groups = result.groups
+    val usesModel = result.usesModel
+    var index by mutableStateOf(0)
+    var merged by mutableStateOf(0)
+    var skipped by mutableStateOf(0)
+    /** For the group on screen: the item to keep (null: the suggested one), and any left out. */
+    var keep by mutableStateOf<Long?>(null)
+    val leftOut = mutableStateListOf<Long>()
+    var busy by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+
+    fun next() {
+        index++
+        keep = null
+        leftOut.clear()
+        error = null
+    }
 }
 
 /** The recipe editor (the website's recipe form). */
@@ -500,6 +523,55 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         stateAction { if (id == null) api.createCatalogItem(it, name, ranks) else api.updateCatalogItem(it, id, name, ranks) }.error()
 
     suspend fun deleteCatalogItem(id: Long) = stateAction { api.deleteCatalogItem(it, id) }.error()
+
+    /** Merge catalog items into one. Returns an error, or null when merged. */
+    suspend fun mergeCatalog(keep: Long, others: List<Long>): String? = stateAction { api.mergeCatalog(it, keep, others) }.error()
+
+    var duplicates by mutableStateOf<DuplicatesReview?>(null)
+        private set
+
+    /** Look for catalog items that are the same product, then go through them. */
+    fun findDuplicates() {
+        val hid = householdId
+        reading = "Looking for duplicates"
+        viewModelScope.launch {
+            val r = online { api.findDuplicates(hid) }
+            reading = null
+            when (r) {
+                is Outcome.Ok -> {
+                    duplicates = DuplicatesReview(r.value)
+                    go(Screen.Duplicates)
+                }
+                is Outcome.Failed -> message(r.message)
+            }
+        }
+    }
+
+    /** Merge the group on screen (keeping one) or leave it, then on to the next. */
+    fun decideDuplicates(merge: Boolean, keep: Long, others: List<Long>) {
+        val review = duplicates ?: return
+        if (!merge) {
+            review.skipped++
+            review.next()
+            return
+        }
+        review.busy = true
+        viewModelScope.launch {
+            val failed = if (others.isEmpty()) "Pick at least two to merge, and the one to keep." else mergeCatalog(keep, others)
+            review.busy = false
+            if (failed != null) {
+                review.error = failed
+            } else {
+                review.merged++
+                review.next()
+            }
+        }
+    }
+
+    fun closeDuplicates() {
+        duplicates = null
+        back()
+    }
 
     // ---------- recipes (online, like the website) ----------
 

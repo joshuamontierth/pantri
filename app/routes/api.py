@@ -773,6 +773,27 @@ def create_catalog_item(household_id: int, body: dict = Body(...), membership=De
     return {"id": item.id, "state": household_state(db, household_id)}
 
 
+@router.post("/h/{household_id}/catalog/merge")
+def merge_catalog_items(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """{"keep_id", "merge_ids": [...]}: recipes and lists use the kept item; the others are removed."""
+    keep = body.get("keep_id")
+    ids = body.get("merge_ids") if isinstance(body.get("merge_ids"), list) else []
+    if not isinstance(keep, int) or isinstance(keep, bool):
+        raise HTTPException(400, "Pick the item to keep.")
+    item = _act(actions.merge_catalog_items, db, household_id, keep, [i for i in ids if isinstance(i, int) and not isinstance(i, bool)][:50])
+    return {"id": item.id, "state": household_state(db, household_id)}
+
+
+@router.post("/h/{household_id}/catalog/duplicates")
+def catalog_duplicates(household_id: int, membership=Depends(api_member), db: Session = Depends(get_db)):
+    """Groups of catalog items that look like the same product: {"groups": [{items: [{id, name, stores, recipes, on_list}], keep, reason}], "uses_model"}."""
+    try:
+        groups = actions.duplicate_groups(db, household_id)
+    except scan.ScanError as e:
+        raise HTTPException(400, str(e))
+    return {"groups": groups, "uses_model": scan.enabled()}
+
+
 @router.put("/h/{household_id}/catalog/{item_id}")
 def update_catalog_item(household_id: int, item_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
     _act(actions.update_catalog_item, db, household_id, item_id, str(body.get("name") or ""), _ranks(body))

@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
 
 from . import config, quantities, scan, security, services
 from .events import broker
@@ -321,6 +322,141 @@ def delete_catalog_item(db, household_id, item_id):
     db.delete(item)
     db.commit()
     broker.publish(household_id, "catalog")
+
+
+def merge_catalog_items(db, household_id, keep_id, merge_ids):
+    """Fold other catalog items into one: recipes and lists use the kept item, and the others are removed.
+
+    The kept item's stores come first, then any the others had. A recipe that had both gets one row,
+    with the amounts added when they can be (2 cups and 1 lb stay separate rows). List lines that
+    become the same item on one list merge, as when adding.
+    """
+    keep = get_catalog_item(db, household_id, keep_id)
+    others = [get_catalog_item(db, household_id, i) for i in dict.fromkeys(merge_ids or []) if i != keep.id]
+    if not others:
+        raise ActionError("Pick another item to merge with.")
+    other_ids = [o.id for o in others]
+    other_names = [o.name_lower for o in others]
+    services.set_ranks(db, keep, list(dict.fromkeys(keep.ranked_store_ids + [sid for o in others for sid in o.ranked_store_ids])))
+
+    for ing in db.query(RecipeIngredient).filter(RecipeIngredient.catalog_item_id.in_(other_ids)).all():
+        ing.catalog_item_id = keep.id
+    db.flush()
+    _fold_recipe_rows(db, keep.id)
+
+    lines = db.query(ListItem).filter(
+        ListItem.household_id == household_id,
+        (ListItem.catalog_item_id.in_(other_ids)) | (ListItem.catalog_item_id.is_(None) & ListItem.name_lower.in_(other_names)),
+    ).all()
+    keys = set()
+    for li in lines:
+        li.catalog_item_id, li.name, li.name_lower = keep.id, keep.name, keep.name_lower
+        keys.add(services.store_key(li.store_id))
+    db.flush()
+    for li in lines:
+        state = sa_inspect(li)
+        if not (state.deleted or state.was_deleted):  # not already folded into another line
+            services.merge_duplicate(db, li)
+
+    for o in others:
+        db.delete(o)
+    db.commit()
+    broker.publish(household_id, "catalog")
+    broker.publish(household_id, "recipes")
+    if keys:
+        broker.publish(household_id, "lists", stores=sorted(keys))
+    return keep
+
+
+def _fold_recipe_rows(db, catalog_item_id):
+    rows = db.query(RecipeIngredient).filter_by(catalog_item_id=catalog_item_id).order_by(RecipeIngredient.recipe_id, RecipeIngredient.position).all()
+    by_recipe = {}
+    for r in rows:
+        by_recipe.setdefault(r.recipe_id, []).append(r)
+    for same in by_recipe.values():
+        first = same[0]
+        parts = [[first.amount, first.unit]] if first.amount is not None else []
+        for r in same[1:]:
+            combined = quantities.combine(parts, [[r.amount, r.unit]] if r.amount is not None else [])
+            if len(combined) <= 1:
+                parts = combined
+                db.delete(r)
+        first.amount, first.unit = (parts[0][0], parts[0][1]) if parts else (None, "")
+    db.flush()
+
+
+def duplicate_groups(db, household_id):
+    """Catalog items that look like the same product, to go through one group at a time.
+
+    Names that differ only by a plural always count; with a model set up, it suggests more (other
+    names, misspellings). Groups that share an item are joined. Each group comes with the item
+    suggested to keep: the one more recipes use, then the one with more stores.
+    """
+    catalog = services.catalog_items(db, household_id)
+    by_lower = {c.name_lower: c for c in catalog}
+    groups = []  # [(set of ids, reason)]
+    by_key = {}
+    for c in catalog:
+        by_key.setdefault(services.name_key(c.name), []).append(c.id)
+    groups += [(set(ids), "Plural") for ids in by_key.values() if len(ids) > 1]
+    if scan.enabled():
+        for g in scan.find_duplicates([c.name for c in catalog]):
+            ids = {by_lower[n.lower()].id for n in g["names"] if n.lower() in by_lower}
+            if len(ids) > 1:
+                groups.append((ids, g["reason"]))
+    # Join groups that share an item.
+    joined = []
+    for ids, reason in groups:
+        overlapping = [j for j in joined if j[0] & ids]
+        for j in overlapping:
+            joined.remove(j)
+            ids = ids | j[0]
+            reason = _join_reasons(j[1], reason)
+        joined.append((ids, reason))
+    out = [describe_group(db, household_id, ids, reason) for ids, reason in joined]
+    out = [g for g in out if g]
+    return sorted(out, key=lambda g: g["items"][0]["name"].lower())
+
+
+def _join_reasons(*reasons):
+    """"Plural" and "plural, another name" make "Plural, another name"."""
+    out = []
+    for piece in (p.strip() for r in reasons for p in (r or "").split(",")):
+        if piece and piece.lower() not in (o.lower() for o in out):
+            out.append(piece)
+    return ", ".join(out)
+
+
+def describe_group(db, household_id, ids, reason=""):
+    """{"items": [{id, name, stores, recipes, on_list}], "keep", "reason"}, or None if fewer than two are left."""
+    items = (
+        db.query(CatalogItem).filter(CatalogItem.household_id == household_id, CatalogItem.id.in_(list(ids)))
+        .order_by(CatalogItem.name_lower).all()
+    )
+    if len(items) < 2:
+        return None
+    stores = {s.id: s.name for s in services.household_stores(db, household_id)}
+    ids = [c.id for c in items]
+    recipes = dict(
+        db.query(RecipeIngredient.catalog_item_id, func.count(func.distinct(RecipeIngredient.recipe_id)))
+        .filter(RecipeIngredient.catalog_item_id.in_(ids)).group_by(RecipeIngredient.catalog_item_id).all()
+    )
+    listed = {
+        cid for (cid,) in db.query(ListItem.catalog_item_id)
+        .filter(ListItem.household_id == household_id, ListItem.checked.is_(False), ListItem.catalog_item_id.in_(ids)).all()
+    }
+    described = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "stores": " › ".join(stores[sid] for sid in c.ranked_store_ids if sid in stores),
+            "recipes": recipes.get(c.id, 0),
+            "on_list": c.id in listed,
+        }
+        for c in items
+    ]
+    keep = max(described, key=lambda d: (d["recipes"], len(d["stores"]) > 0, d["on_list"]))
+    return {"items": described, "keep": keep["id"], "reason": reason}
 
 
 # ---------- recipes ----------

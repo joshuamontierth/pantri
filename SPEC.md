@@ -46,6 +46,8 @@
 ## Ingredient Catalog (per household)
 - Each item has a name and an ordered store ranking (1st, 2nd, 3rd, … any number; may be empty → routes to "Other").
 - Catalog page: create, rename, edit rankings, delete (blocked if used by a recipe; shows which).
+- **Merge** two items (from an item's page; choose whose name stays): recipe ingredients and list items move to the kept item; its rankings come first, then the other's stores. A recipe with both gets one row, amounts summed when compatible (otherwise both rows stay). Same-list unchecked lines merge. The other item is deleted.
+- **Find duplicates** (catalog page): groups of items that look like the same product: names equal but for a plural (always), plus the model's suggestions (other names, misspellings, abbreviations; different kinds stay apart). Groups sharing an item are joined. Gone through one at a time: each item's stores, recipe count and whether it's on a list; choose the item to keep (default: used by the most recipes); in groups of 3+, leave items out; Merge or "Not the same". Ends with a count of merged and kept apart.
 
 ## Recipes (per household)
 - Fields: name, ingredients (catalog item + optional quantity + unit), directions (free text, shown as numbered steps), optional link to the source.
@@ -68,6 +70,7 @@
 - Adding: pick recipes (searchable) and/or type a meal. With recipes picked, "Add the ingredients to my lists" (on by default) opens the Add Recipe(s) → Lists picker with those recipes chosen and a way back to that week; off (leftovers, a repeat) just saves.
 - Entries link to their recipe and can be removed. A deleted recipe's entries keep its name as text.
 - "Add this week's ingredients to lists" opens the picker with every recipe planned that week.
+- Finishing the picker after opening it from the calendar returns to the calendar, on the same week.
 - Changes need a connection; the calendar is viewable offline. "Today" uses the household's time zone (TIMEZONE) on the website and the phone's clock in the app.
 
 ## Quantities & Units

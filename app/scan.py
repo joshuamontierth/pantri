@@ -275,3 +275,48 @@ def read_shopping_list(photo_bytes, text, catalog_names):
     if not items:
         raise ScanError(missing)
     return items
+
+
+_DUPLICATES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "groups": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"items": {"type": "array", "items": {"type": "string"}}, "reason": {"type": "string"}},
+                "required": ["items", "reason"],
+            },
+        },
+    },
+    "required": ["groups"],
+}
+
+_DUPLICATES_PROMPT = """Below is a household's catalog of grocery items, one per line. Find items that are the same \
+product written differently, so they can be merged into one:
+- plurals and misspellings, like Avocado and Avocados, or Tomatoe and Tomato
+- other names or abbreviations for the same thing, like Scallions and Green onions, or OJ and Orange juice
+- extra words that don't change what you'd buy, like Garlic and Garlic cloves
+Keep different kinds apart: Cake flour is not Flour, Smoked paprika is not Paprika, Red onion is not Onion, \
+Almond milk is not Milk, Chicken breast is not Chicken thighs.
+- groups: each group is two or more names copied exactly from the list that are the same product. A name is in \
+at most one group. An empty list if there are none.
+- reason: a few words, like "plural", "misspelling" or "another name for it".
+
+Catalog:
+"""
+
+
+def find_duplicates(names):
+    """[{"names": [...], "reason"}]: catalog items the model thinks are the same product."""
+    if len(names) < 2:
+        return []
+    data = _ask_model(_DUPLICATES_PROMPT + "\n".join(names[:600]), None, _DUPLICATES_SCHEMA, reader="model")
+    out = []
+    for g in data.get("groups") or []:
+        if not isinstance(g, dict) or not isinstance(g.get("items"), list):
+            continue
+        group = [str(n).strip() for n in g["items"] if str(n).strip()]
+        if len(group) >= 2:
+            out.append({"names": group, "reason": str(g.get("reason") or "").strip()[:80]})
+    return out

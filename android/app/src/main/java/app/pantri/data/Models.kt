@@ -136,6 +136,25 @@ data class StateResult(
     val id: Long? = null,
 )
 
+// ---------- possible duplicates in the catalog ----------
+
+@Serializable
+data class DupeItem(
+    val id: Long,
+    val name: String,
+    /** "Costco › Smith's", empty when it has no stores. */
+    val stores: String = "",
+    val recipes: Int = 0,
+    @SerialName("on_list") val onList: Boolean = false,
+)
+
+/** Catalog items that look like the same product, with the one suggested to keep. */
+@Serializable
+data class DupeGroup(val items: List<DupeItem>, val keep: Long, val reason: String = "")
+
+@Serializable
+data class DuplicatesResult(val groups: List<DupeGroup> = emptyList(), @SerialName("uses_model") val usesModel: Boolean = false)
+
 // ---------- a shopping list read from photos or pasted text ----------
 
 /** One thing the list reader found, matched to the catalog, with a store suggested. */

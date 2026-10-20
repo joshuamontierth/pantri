@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set nav = "catalog" %}
+{% block title %}Possible duplicates · Catalog{% endblock %}
+{% block content %}
+{% set hid = household.id %}
+<div class="narrow">
+  <a class="back-link" href="/h/{{ hid }}/catalog">{{ icon("chevron-left", 18) }}Catalog</a>
+  <h1 class="page-title">Possible duplicates</h1>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+
+  {% if group %}
+  <div class="dupe-progress" aria-label="{{ position }} of {{ total }}">
+    <span>{{ position }} of {{ total }}</span>
+    <span class="meter"><span style="width: {{ (100 * position / total)|round|int }}%"></span></span>
+  </div>
+  <form method="post" action="/h/{{ hid }}/catalog/duplicates/next" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="queue" value="{{ queue }}">
+    <input type="hidden" name="total" value="{{ total }}">
+    <input type="hidden" name="merged" value="{{ merged }}">
+    <input type="hidden" name="skipped" value="{{ skipped }}">
+    <input type="hidden" name="reason" value="{{ group.reason }}">
+    {% for it in group["items"] %}<input type="hidden" name="group" value="{{ it.id }}">{% endfor %}
+    <div>
+      <p class="section-label">Keep which name?</p>
+      {% if group.reason %}<p class="dupe-reason">Looks like the same thing: {{ group.reason|lower }}</p>{% endif %}
+    </div>
+    <ul class="rows">
+      {% for it in group["items"] %}
+      <li>
+        <label class="row-item dupe-row">
+          <input type="radio" class="radio" name="keep" value="{{ it.id }}"{{ ' checked' if it.id == group.keep }}>
+          <span class="grow">
+            <span class="row-title">{{ it.name }}</span>
+            <span class="rank-summary">
+              {{ it.stores or "No stores yet" }}{% if it.recipes %} · in {{ it.recipes }} recipe{{ "s" if it.recipes != 1 }}{% endif %}{% if it.on_list %} · on a list{% endif %}
+            </span>
+          </span>
+          {% if group["items"]|length > 2 %}
+          <input type="checkbox" class="box" name="include" value="{{ it.id }}" checked aria-label="Include {{ it.name }}">
+          {% else %}
+          <input type="hidden" name="include" value="{{ it.id }}">
+          {% endif %}
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="field-hint">
+      {% if group["items"]|length > 2 %}Uncheck any that aren't the same. {% endif %}Recipes and lists that use the others will use the one you keep, with its stores first.
+    </p>
+    <div class="form-actions">
+      <button class="btn primary grow" name="decision" value="merge">Merge</button>
+      <button class="btn grow" name="decision" value="skip">Not the same</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="state">
+    <span class="state-mark">{{ icon("check", 28, 2.4) }}</span>
+    {% if total %}
+    <p class="state-title">All done</p>
+    <p class="state-text">Merged {{ merged }}{% if skipped %}, kept {{ skipped }} apart{% endif %}.</p>
+    {% else %}
+    <p class="state-title">No duplicates found</p>
+    <p class="state-text">{{ "Nothing in the catalog looks like the same product twice." if uses_model else "No two items differ only by a plural. With a model set up (OLLAMA_URL), other names and misspellings are found too." }}</p>
+    {% endif %}
+    <a class="btn" href="/h/{{ hid }}/catalog">Back to the catalog</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

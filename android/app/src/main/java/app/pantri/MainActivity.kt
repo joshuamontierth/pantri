@@ -37,6 +37,7 @@ import app.pantri.ui.AppViewModel
 import app.pantri.ui.CatalogEditScreen
 import app.pantri.ui.CatalogScreen
 import app.pantri.ui.ChangePasswordScreen
+import app.pantri.ui.DuplicatesScreen
 import app.pantri.ui.EditorScreen
 import app.pantri.ui.HouseholdsScreen
 import app.pantri.ui.ListsScreen
@@ -134,6 +135,7 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
         when (vm.screen) {
             Screen.Editor -> vm.closeEditor()
             Screen.ScanReview -> vm.closeScanReview()
+            Screen.Duplicates -> vm.closeDuplicates()
             else -> vm.back()
         }
     }
@@ -188,6 +190,7 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
         Screen.Stores -> StoresScreen(vm, current, snackbar)
         Screen.Editor -> vm.editor?.let { EditorScreen(vm, current, it, snackbar) } ?: run { vm.back() }
         Screen.ScanReview -> vm.scanReview?.let { ScanReviewScreen(vm, current, it, snackbar) } ?: run { vm.back() }
+        Screen.Duplicates -> vm.duplicates?.let { DuplicatesScreen(vm, current, it, snackbar) } ?: run { vm.back() }
         else -> Unit
     }
 }

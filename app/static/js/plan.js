@@ -53,7 +53,8 @@
   // ---------- step 1: choose recipes ----------
   function renderChoose(sel) {
     const recipes = view.recipes;
-    let h = '<a class="back-link" href="/h/' + hid + '/recipes">' + icon("back", 18) + "Recipes</a>" +
+    let h = (sel.back ? '<a class="back-link" href="' + esc(sel.back) + '">' + icon("back", 18) + "Meals</a>"
+      : '<a class="back-link" href="/h/' + hid + '/recipes">' + icon("back", 18) + "Recipes</a>") +
       '<h1 class="page-title">Choose recipes</h1>';
     if (!recipes.length) {
       root.innerHTML = h + '<p class="lede">No recipes yet. <a href="/h/' + hid + '/recipes/new">Create one</a></p>';
@@ -81,7 +82,7 @@
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const ids = Array.from(form.querySelectorAll('input[name="r"]:checked')).map((b) => Number(b.value));
-      if (ids.length) location.hash = hashFor("pick", ids, sel.mult);
+      if (ids.length) location.hash = hashFor("pick", ids, sel.mult, sel.back);
     });
     update();
   }
@@ -163,7 +164,7 @@
   function renderPick(sel) {
     const { list, errors } = selections(sel);
     if (!list.length) { location.replace("#"); return; }
-    const back = hashFor("choose", sel.ids, sel.mult);
+    const back = hashFor("choose", sel.ids, sel.mult, sel.back);
     root.innerHTML =
       (sel.back ? '<a class="back-link" href="' + esc(sel.back) + '">' + icon("back", 18) + "Meals</a>"
         : '<a class="back-link" href="' + back + '">' + icon("back", 18) + "Recipes</a>") +
@@ -241,7 +242,8 @@
         store: r.store === "none" ? null : Number(r.store), tags: r.tags,
       })));
       try { sessionStorage.setItem("sl:toast", "Added " + picked.length + " item" + (picked.length === 1 ? "" : "s") + " from recipes"); } catch (_) { /* no toast then */ }
-      location.href = "/h/" + hid + "#store-" + picked[0].store;
+      // From the meal calendar: back to the week you were on (it sends the queue too). Otherwise on to the lists.
+      location.href = current.sel.back || "/h/" + hid + "#store-" + picked[0].store;
     }
   });
 

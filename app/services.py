@@ -283,7 +283,8 @@ def parse_rank_ids(db, household_id, text):
 
 
 def set_ranks(db, catalog_item, store_ids):
-    db.query(StoreRank).filter_by(catalog_item_id=catalog_item.id).delete(synchronize_session=False)
+    # "fetch" drops the old rows from the session too, so new ones that reuse their ids don't clash.
+    db.query(StoreRank).filter_by(catalog_item_id=catalog_item.id).delete(synchronize_session="fetch")
     db.flush()
     for rank, sid in enumerate(store_ids):
         db.add(StoreRank(catalog_item_id=catalog_item.id, store_id=sid, rank=rank))

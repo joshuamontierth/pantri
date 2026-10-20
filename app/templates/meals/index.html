@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% set nav = "meals" %}
 {% block title %}Meals · {{ household.name }}{% endblock %}
+{% block body_attrs %}data-household="{{ household.id }}"{% endblock %}
 {% block scripts %}
+<script src="/static/js/household.js?v={{ static_v }}" defer></script>
 <script src="/static/js/meals.js?v={{ static_v }}" defer></script>
 {% endblock %}
 {% block content %}
