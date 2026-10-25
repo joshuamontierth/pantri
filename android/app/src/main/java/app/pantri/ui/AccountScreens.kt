@@ -24,6 +24,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.border
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -339,6 +342,13 @@ fun SettingsScreen(vm: AppViewModel, status: SyncStatus, snackbar: SnackbarHostS
                 }
             })
 
+            Section("Meal calendar")
+            WeekStartPicker(vm.view.value?.weekStart ?: 5) { day ->
+                act {
+                    vm.setWeekStart(day).also { if (it == null) vm.message("Weeks start on ${WEEKDAYS[day]} now.") }
+                }
+            }
+
             if (hs == null) {
                 Text(if (status.connection == Connection.Offline) NEEDS_CONNECTION else "Loading…", color = colors.ink2, modifier = Modifier.padding(top = 24.dp))
             } else {
@@ -475,4 +485,34 @@ fun SettingsScreen(vm: AppViewModel, status: SyncStatus, snackbar: SnackbarHostS
         }
     }
     if (confirmLogout) LogoutConfirm(vm) { confirmLogout = false }
+}
+
+
+private val WEEKDAYS = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+/** "Weeks start on [Saturday]": the meal calendar's first day, for the whole household (like the website). */
+@Composable
+private fun WeekStartPicker(current: Int, onPick: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Weeks start on", Modifier.weight(1f), fontSize = 16.sp, color = colors.ink)
+        Box {
+            Row(
+                Modifier.clip(RadiusShape).border(1.dp, colors.rule2, RadiusShape).clickable { open = true }.heightIn(min = 48.dp).padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(WEEKDAYS.getOrElse(current) { "Saturday" }, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
+                Spacer(Modifier.width(6.dp))
+                Icon(AppIcons.ChevronDown, null, Modifier.size(16.dp), tint = colors.ink2)
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = colors.sheet) {
+                for (day in listOf(6, 0, 1, 2, 3, 4, 5)) {
+                    DropdownMenuItem(text = { Text(WEEKDAYS[day], color = colors.ink) }, onClick = {
+                        open = false
+                        if (day != current) onPick(day)
+                    })
+                }
+            }
+        }
+    }
 }

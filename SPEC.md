@@ -65,11 +65,11 @@
 - Confirm → items are added to each store's list, merging per the rules above, tagged with source recipe(s).
 
 ## Meal Calendar
-- Weekly view, Sunday to Saturday; previous/next week and back to this week. Each day has two meals: lunch and dinner.
+- Weekly view; previous/next week and back to this week. Each day has two meals: lunch and dinner. Weeks start on Saturday by default; the first day is a household setting (Settings → Meal calendar, any member).
 - A meal holds any number of entries: recipes (a recipe appears at most once per meal) and/or meals typed in without a recipe (up to 150 characters).
-- Adding: pick recipes (searchable) and/or type a meal. With recipes picked, "Add the ingredients to my lists" (on by default) opens the Add Recipe(s) → Lists picker with those recipes chosen and a way back to that week; off (leftovers, a repeat) just saves.
+- Adding: pick recipes (searchable) and/or type a meal. Adding saves and stays on the week (plan first, shop later).
 - Entries link to their recipe and can be removed. A deleted recipe's entries keep its name as text.
-- "Add this week's ingredients to lists" opens the picker with every recipe planned that week.
+- "Choose meals to shop for": the week's recipe entries become check boxes (from today on checked, past days not; meals without a recipe can't be picked). "Shop for N meals" opens the Add Recipe(s) → Lists picker with the checked recipes, each with a multiplier of how many checked meals use it, and a way back to that week.
 - Finishing the picker after opening it from the calendar returns to the calendar, on the same week.
 - Changes need a connection; the calendar is viewable offline. "Today" uses the household's time zone (TIMEZONE) on the website and the phone's clock in the app.
 

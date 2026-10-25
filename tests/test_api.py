@@ -77,7 +77,7 @@ def test_state_snapshot(make_user):
     phone = App("alice")
     r = phone.get(f"/api/v1/h/{hid}/state")
     state = r.json()
-    assert state["household"] == {"id": hid, "name": "Home"} and state["other_label"] == "Other"
+    assert state["household"] == {"id": hid, "name": "Home", "week_start": 5} and state["other_label"] == "Other"
     assert state["stores"] == [{"id": costco, "name": "Costco"}]
     item = state["items"][0]
     assert (item["name"], item["store_id"], item["qty"], item["qty_text"], item["checked"]) == ("Eggs", costco, "12", "12", False)

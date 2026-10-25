@@ -59,7 +59,8 @@ sealed interface Screen {
 
     data class Recipe(val id: Long) : Screen
     data class PlanChoose(val preselected: List<Long> = emptyList()) : Screen
-    data class Plan(val recipeIds: List<Long>) : Screen
+    /** multipliers: how many times a recipe is cooked (picked for two meals = 2); otherwise 1. */
+    data class Plan(val recipeIds: List<Long>, val multipliers: Map<Long, Int> = emptyMap()) : Screen
     data object Editor : Screen // the recipe being edited is AppViewModel.editor
     data object ScanReview : Screen // what was read from a shopping list is AppViewModel.scanReview
     data object Duplicates : Screen // the groups being gone through are AppViewModel.duplicates
@@ -690,6 +691,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The Sunday of the week on screen; null is this week. */
     var mealsWeek by mutableStateOf<LocalDate?>(null)
+
+    /** The meal calendar's first day of the week for the household (0 = Monday ... 6 = Sunday). */
+    suspend fun setWeekStart(weekday: Int): String? = stateAction { api.setWeekStart(it, weekday) }.error()
 
     /** Recipes and/or a meal without one on a lunch or dinner. Returns an error, or null when added. */
     suspend fun addMeals(day: LocalDate, slot: String, recipeIds: List<Long>, title: String): String? =

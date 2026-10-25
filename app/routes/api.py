@@ -183,7 +183,7 @@ def household_state(db, household_id):
         .order_by(Meal.day, Meal.slot, Meal.position, Meal.id).all()
     )
     return {
-        "household": {"id": household.id, "name": household.name},
+        "household": {"id": household.id, "name": household.name, "week_start": actions.first_weekday(household)},
         "other_label": services.OTHER_LABEL,
         "stores": [{"id": s.id, "name": s.name} for s in stores],
         "items": [_item(i) for i in sorted(items, key=lambda i: i.id)],
@@ -633,6 +633,13 @@ def add_meals(household_id: int, body: dict = Body(...), membership=Depends(api_
     """{"day": "2026-10-14", "slot": "lunch"|"dinner", "recipe_ids": [...], "title": "Leftovers"}: either or both."""
     ids = body.get("recipe_ids") if isinstance(body.get("recipe_ids"), list) else []
     _act(actions.add_meals, db, household_id, body.get("day"), body.get("slot"), ids[:50], str(body.get("title") or ""))
+    return {"state": household_state(db, household_id)}
+
+
+@router.post("/h/{household_id}/week-start")
+def set_week_start(household_id: int, body: dict = Body(...), membership=Depends(api_member), db: Session = Depends(get_db)):
+    """{"weekday": 0-6, Monday = 0}: the meal calendar's first day of the week."""
+    _act(actions.set_week_start, db, membership, body.get("weekday"))
     return {"state": household_state(db, household_id)}
 
 

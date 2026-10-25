@@ -29,6 +29,8 @@ data class LocalView(
     val catalog: List<CatalogDto>,
     val recipes: List<RecipeDto>,
     val meals: List<MealDto> = emptyList(),
+    /** The meal calendar's first day: 0 = Monday ... 6 = Sunday. */
+    val weekStart: Int = 5,
 ) {
     private val storeNames = stores.associate { it.id to it.name }
     private val catalogByLower = catalog.associateBy { it.name.lowercase() }
@@ -199,6 +201,7 @@ object LocalApply {
             catalog = state.catalog,
             recipes = state.recipes,
             meals = state.meals,
+            weekStart = state.household.weekStart,
         )
     }
 

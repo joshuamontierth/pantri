@@ -99,13 +99,13 @@ Nothing it already has is changed: the name, existing amounts and existing direc
 
 ## Meal calendar
 
-**Meals** in the top bar shows a week, Sunday to Saturday, with a lunch and a dinner for each day. Use the arrows for other weeks, and **Today** to come back.
+**Meals** in the top bar shows a week with a lunch and a dinner for each day. Weeks run Saturday to Friday; change the first day in **Settings → Meal calendar** (it's the same for everyone in the household). Use the arrows for other weeks, and **Today** to come back.
 
 - Tap **Add** on a lunch or dinner. Check one or more recipes (search if you have many), type a meal without a recipe, or both.
-- With recipes checked, **Add the ingredients to my lists** (on by default) takes you to the ingredient picker next, with those recipes chosen, to check what you need and pick stores, as when adding recipes to lists. Turn it off for leftovers or a repeat, and the meal is just saved.
+- Adding just saves the meal and keeps you on the week, so you can plan every meal first.
 - Tap a recipe on the calendar to open it; **×** removes it from that meal. A recipe that's deleted later stays on past meals by name.
-- **Add this week's ingredients to lists** opens the picker with every recipe planned that week.
-- After adding ingredients from the calendar, you're back on the week you were looking at (not the lists).
+- Then **Choose meals to shop for**: the week's recipe meals get check boxes, with the ones still ahead checked. Uncheck leftovers and repeats, then **Shop for N meals** opens the ingredient picker with those recipes, to check what you need and pick stores. A recipe checked for two meals starts at ×2.
+- After adding the ingredients, you're back on the week you were looking at (not the lists).
 - Changing the calendar needs a connection; it opens as last seen when offline. "Today" follows `TIMEZONE` in `.env` on the website and the phone's own time in the app.
 
 ## Merging and duplicates

@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -126,7 +128,10 @@ def _settings_page(request, db, membership, error=None, notice=None, status_code
     return render(
         request,
         "households/settings.html",
-        {"members": members, "invites": invites, "error": error, "notice": notice, "android_apk": ANDROID_APK.exists()},
+        {
+            "members": members, "invites": invites, "error": error, "notice": notice, "android_apk": ANDROID_APK.exists(),
+            "week_start": actions.first_weekday(membership.household), "WEEKDAYS": actions.WEEKDAYS,
+        },
         db=db,
         membership=membership,
         status_code=status_code,
@@ -160,6 +165,14 @@ def rename(
 ):
     failed = _act(actions.rename_household, db, membership, name, page=_error_page(request, db, membership))
     return failed or _redirect(f"/h/{household_id}/settings")
+
+
+@router.post("/h/{household_id}/week-start")
+def week_start(request: Request, household_id: int, weekday: str = Form(""), membership=Depends(household_member), db: Session = Depends(get_db)):
+    """The meal calendar's first day of the week, for everyone in the household."""
+    day = actions.WEEKDAYS[int(weekday)] if weekday.isdigit() and int(weekday) < 7 else None
+    failed = _act(actions.set_week_start, db, membership, int(weekday) if day else None, page=_error_page(request, db, membership))
+    return failed or _redirect(f"/h/{household_id}/settings?notice=" + quote(f"Weeks start on {day} now."))
 
 
 @router.post("/h/{household_id}/invite")

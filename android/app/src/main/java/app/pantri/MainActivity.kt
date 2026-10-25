@@ -185,7 +185,7 @@ private fun MainScreens(vm: AppViewModel, snackbar: SnackbarHostState) {
         Screen.Catalog -> CatalogScreen(vm, current, status, snackbar)
         is Screen.Recipe -> RecipeScreen(vm, current, screen.id, snackbar)
         is Screen.PlanChoose -> PlanChooseScreen(vm, current, screen.preselected, snackbar)
-        is Screen.Plan -> PlanScreen(vm, current, screen.recipeIds, snackbar)
+        is Screen.Plan -> PlanScreen(vm, current, screen.recipeIds, screen.multipliers, snackbar)
         is Screen.CatalogEdit -> CatalogEditScreen(vm, current, screen.itemId, screen.name, snackbar)
         Screen.Stores -> StoresScreen(vm, current, snackbar)
         Screen.Editor -> vm.editor?.let { EditorScreen(vm, current, it, snackbar) } ?: run { vm.back() }

@@ -352,9 +352,9 @@ private fun ordinal(i: Int) = listOf("1st", "2nd", "3rd").getOrElse(i) { "${i + 
 /** Step 2: check the ingredients you need and pick a store for each (the website's "Choose ingredients"). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PlanScreen(vm: AppViewModel, view: Household, recipeIds: List<Long>, snackbar: SnackbarHostState) {
+fun PlanScreen(vm: AppViewModel, view: Household, recipeIds: List<Long>, multipliers: Map<Long, Int>, snackbar: SnackbarHostState) {
     val recipes = recipeIds.mapNotNull { id -> view.recipes.firstOrNull { it.id == id } }
-    val multText = remember { mutableStateMapOf<Long, String>() }
+    val multText = remember { mutableStateMapOf<Long, String>().apply { multipliers.forEach { (id, n) -> if (n > 1) put(id, n.toString()) } } }
     val include = remember { mutableStateMapOf<String, Boolean>() }
     val storeChoice = remember { mutableStateMapOf<String, Long?>() }
     val focus = LocalFocusManager.current

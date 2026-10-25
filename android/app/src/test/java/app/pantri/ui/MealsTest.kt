@@ -13,10 +13,12 @@ import java.time.LocalDate
 
 class MealsTest {
     @Test
-    fun weeksStartOnSunday() {
-        assertEquals(LocalDate.of(2026, 10, 11), weekStart(LocalDate.of(2026, 10, 17))) // Saturday
-        assertEquals(LocalDate.of(2026, 10, 18), weekStart(LocalDate.of(2026, 10, 18))) // Sunday
-        assertEquals(LocalDate.of(2026, 10, 11), weekStart(LocalDate.of(2026, 10, 12))) // Monday
+    fun weeksStartOnSaturdayUnlessSet() {
+        assertEquals(LocalDate.of(2026, 10, 17), weekStart(LocalDate.of(2026, 10, 17))) // a Saturday starts its week
+        assertEquals(LocalDate.of(2026, 10, 10), weekStart(LocalDate.of(2026, 10, 16))) // Friday ends it
+        assertEquals(LocalDate.of(2026, 10, 11), weekStart(LocalDate.of(2026, 10, 17), first = 6)) // Sunday weeks
+        assertEquals(LocalDate.of(2026, 10, 18), weekStart(LocalDate.of(2026, 10, 18), first = 6))
+        assertEquals(LocalDate.of(2026, 10, 12), weekStart(LocalDate.of(2026, 10, 18), first = 0)) // Monday weeks
     }
 
     @Test

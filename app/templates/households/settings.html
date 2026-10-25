@@ -26,6 +26,16 @@
     <li><a href="/households"><span>New household or invites{% if pending_invite_count %} <span class="badge">{{ pending_invite_count }}</span>{% endif %}</span>{{ icon("chevron-right", 18) }}</a></li>
   </ul>
 
+  <h2 class="section-label">Meal calendar</h2>
+  <form method="post" action="/h/{{ hid }}/week-start" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="inline-label" for="week-start">Weeks start on</label>
+    <select name="weekday" id="week-start">
+      {% for i in [6, 0, 1, 2, 3, 4, 5] %}<option value="{{ i }}"{{ ' selected' if i == week_start }}>{{ WEEKDAYS[i] }}</option>{% endfor %}
+    </select>
+    <button class="btn">Save</button>
+  </form>
+
   {% if membership.is_admin %}
   <h2 class="section-label">Household name</h2>
   <form method="post" action="/h/{{ hid }}/rename" class="inline-form">

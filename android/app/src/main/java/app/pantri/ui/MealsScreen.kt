@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,8 +62,8 @@ import java.util.Locale
 private val SLOTS = listOf("lunch" to "Lunch", "dinner" to "Dinner")
 private val MONTH_DAY = DateTimeFormatter.ofPattern("MMM d", Locale.US)
 
-/** The Sunday that starts the week with this day in it (actions.week_start). */
-fun weekStart(day: LocalDate): LocalDate = day.minusDays((day.dayOfWeek.value % 7).toLong())
+/** The first day (first: 0 = Monday ... 6 = Sunday; Saturday unless set) of the week with this day in it (actions.week_start). */
+fun weekStart(day: LocalDate, first: Int = 5): LocalDate = day.minusDays((((day.dayOfWeek.value - 1 - first) % 7 + 7) % 7).toLong())
 
 private fun dayName(day: LocalDate) = day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.US)
 
@@ -70,15 +71,20 @@ private fun dayName(day: LocalDate) = day.dayOfWeek.getDisplayName(TextStyle.FUL
 @Composable
 fun MealsScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackbar: SnackbarHostState) {
     val today = LocalDate.now()
-    val thisWeek = weekStart(today)
-    val start = vm.mealsWeek ?: thisWeek
+    val first = view.weekStart
+    val thisWeek = weekStart(today, first)
+    val start = vm.mealsWeek?.let { weekStart(it, first) } ?: thisWeek
     val days = (0L..6L).map { start.plusDays(it) }
     val byDay = view.meals.groupBy { it.day to it.slot }
-    val weekRecipes = view.meals
-        .filter { m -> m.day >= days.first().toString() && m.day <= days.last().toString() && view.hasRecipe(m) }
-        .sortedWith(compareBy<MealDto> { it.position }.thenBy { it.id })
-        .mapNotNull { it.recipeId }.distinct()
+    // The week's recipe meals in calendar order, for choosing which to shop for.
+    val weekMeals = days.flatMap { d -> SLOTS.flatMap { (slot, _) -> byDay[d.toString() to slot].orEmpty().sortedWith(compareBy<MealDto> { it.position }.thenBy { it.id }) } }
+        .filter(view::hasRecipe)
     var adding by remember { mutableStateOf<Pair<LocalDate, String>?>(null) }
+    var choosing by remember(start) { mutableStateOf(false) }
+    val chosen = remember(start) { mutableStateListOf<Long>() }
+    fun toggle(id: Long) {
+        if (id in chosen) chosen.remove(id) else chosen.add(id)
+    }
     val weeksAway = java.time.temporal.ChronoUnit.WEEKS.between(thisWeek, start)
     val weekLabel = when (weeksAway) {
         0L -> "This week"
@@ -94,6 +100,24 @@ fun MealsScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackbar:
         containerColor = colors.paper,
         topBar = { TopNav(Screen.Meals, status, onTab = vm::tab, onSettings = { vm.go(Screen.Settings) }) },
         snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            if (choosing) {
+                Row(Modifier.background(colors.paper).navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val n = chosen.count { id -> weekMeals.any { it.id == id } }
+                    PrimaryButton(
+                        if (n == 0) "Check the meals to shop for" else "Shop for $n meal${if (n == 1) "" else "s"}",
+                        sub = "Next, check the ingredients you need", enabled = n > 0, modifier = Modifier.weight(1f),
+                        onClick = {
+                            // Once per meal: a recipe cooked twice needs twice the ingredients.
+                            val counts = weekMeals.filter { it.id in chosen }.mapNotNull { it.recipeId }.groupingBy { it }.eachCount()
+                            choosing = false
+                            vm.go(Screen.Plan(counts.keys.toList(), counts))
+                        },
+                    )
+                    OutlineButton("Cancel", onClick = { choosing = false }, modifier = Modifier.heightIn(min = 54.dp))
+                }
+            }
+        },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)) {
             item {
@@ -114,20 +138,39 @@ fun MealsScreen(vm: AppViewModel, view: LocalView, status: SyncStatus, snackbar:
                         OutlineButton("Today", small = true, onClick = { setWeek(thisWeek) })
                     }
                 }
+                if (choosing) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RadiusShape).background(colors.accentWash).padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Check the meals to buy ingredients for. Leave out leftovers and repeats; a recipe checked for two meals counts twice.", fontSize = 15.sp, color = colors.ink)
+                        val all = weekMeals.all { it.id in chosen }
+                        Text(
+                            if (all) "Select none" else "Select all",
+                            Modifier.clip(RoundedCornerShape(8.dp)).clickable { chosen.clear(); if (!all) chosen.addAll(weekMeals.map { it.id }) }.padding(vertical = 4.dp),
+                            color = colors.accent, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                        )
+                    }
+                }
             }
             for (day in days) {
                 item(key = day.toString()) {
-                    DaySection(vm, view, day, today, byDay, onAdd = { slot ->
+                    DaySection(vm, view, day, today, byDay, if (choosing) chosen else null, ::toggle, onAdd = { slot ->
                         if (status.connection == Connection.Offline) vm.message("Changing meals needs a connection.")
                         else adding = day to slot
                     })
                 }
             }
-            if (weekRecipes.isNotEmpty()) {
+            if (weekMeals.isNotEmpty() && !choosing) {
                 item {
                     OutlineButton(
-                        "Add this week's ingredients to lists", icon = AppIcons.Import,
-                        onClick = { vm.go(Screen.Plan(weekRecipes)) },
+                        "Choose meals to shop for", icon = AppIcons.Import,
+                        onClick = {
+                            // Meals still ahead start checked; past days don't.
+                            chosen.clear()
+                            chosen.addAll(weekMeals.filter { it.day >= today.toString() }.map { it.id })
+                            choosing = true
+                        },
                         modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                     )
                 }
@@ -149,7 +192,10 @@ private fun SquareButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DaySection(vm: AppViewModel, view: LocalView, day: LocalDate, today: LocalDate, byDay: Map<Pair<String, String>, List<MealDto>>, onAdd: (String) -> Unit) {
+private fun DaySection(
+    vm: AppViewModel, view: LocalView, day: LocalDate, today: LocalDate, byDay: Map<Pair<String, String>, List<MealDto>>,
+    chosen: List<Long>?, onToggle: (Long) -> Unit, onAdd: (String) -> Unit,
+) {
     val isToday = day == today
     Column(Modifier.fillMaxWidth()) {
         HorizontalDivider(color = if (isToday) colors.accent else colors.rule, thickness = if (isToday) 2.dp else 1.dp)
@@ -170,8 +216,8 @@ private fun DaySection(vm: AppViewModel, view: LocalView, day: LocalDate, today:
                     fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp, color = colors.ink2,
                 )
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (m in meals) MealChip(view, m, onOpen = { m.recipeId?.let { vm.go(Screen.Recipe(it)) } }, onRemove = { vm.deleteMeal(m.id) })
-                    Row(
+                    for (m in meals) MealChip(view, m, chosen, onToggle, onOpen = { m.recipeId?.let { vm.go(Screen.Recipe(it)) } }, onRemove = { vm.deleteMeal(m.id) })
+                    if (chosen == null) Row(
                         Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(10.dp))
                             .border(1.dp, colors.rule2, RoundedCornerShape(10.dp)).clickable { onAdd(slot) }.padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -187,10 +233,39 @@ private fun DaySection(vm: AppViewModel, view: LocalView, day: LocalDate, today:
     }
 }
 
+/** chosen: while choosing meals to shop for, the meals checked (a recipe's chip checks it); null otherwise. */
 @Composable
-private fun MealChip(view: LocalView, meal: MealDto, onOpen: () -> Unit, onRemove: () -> Unit) {
+private fun MealChip(view: LocalView, meal: MealDto, chosen: List<Long>?, onToggle: (Long) -> Unit, onOpen: () -> Unit, onRemove: () -> Unit) {
     val recipe = view.hasRecipe(meal)
     val shape = RoundedCornerShape(10.dp)
+    if (chosen != null) {
+        val on = meal.id in chosen
+        Row(
+            Modifier.heightIn(min = 40.dp).clip(shape)
+                .background(if (on) colors.accentWash else colors.field)
+                .border(1.dp, if (on) colors.accent else colors.rule2, shape)
+                .then(if (recipe) Modifier.clickable { onToggle(meal.id) } else Modifier)
+                .padding(start = 10.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (recipe) {
+                Box(
+                    Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(if (on) colors.accent else colors.field)
+                        .border(2.dp, if (on) colors.accent else colors.ink, RoundedCornerShape(6.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (on) Icon(AppIcons.Check, null, Modifier.size(14.dp), tint = colors.accentInk)
+                }
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                view.mealName(meal), Modifier.padding(vertical = 8.dp),
+                fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (recipe) colors.ink else colors.ink3,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        return
+    }
     Row(
         Modifier.heightIn(min = 40.dp).clip(shape)
             .then(if (recipe) Modifier.background(colors.accentWash) else Modifier.background(colors.field).border(1.dp, colors.rule2, shape))
@@ -208,7 +283,7 @@ private fun MealChip(view: LocalView, meal: MealDto, onOpen: () -> Unit, onRemov
     }
 }
 
-/** Add recipes and/or a meal without one (the website's sheet). Recipes can go on to picking their ingredients. */
+/** Add recipes and/or a meal without one (the website's sheet). Shopping for them comes later ("Choose meals to shop for"). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddMealSheet(vm: AppViewModel, view: LocalView, day: LocalDate, slot: String, onDismiss: () -> Unit) {
@@ -216,7 +291,6 @@ private fun AddMealSheet(vm: AppViewModel, view: LocalView, day: LocalDate, slot
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
-    var shop by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     val chosen = remember { mutableStateListOf<Long>() }
@@ -237,7 +311,6 @@ private fun AddMealSheet(vm: AppViewModel, view: LocalView, day: LocalDate, slot
                 return@launch
             }
             onDismiss()
-            if (ids.isNotEmpty() && shop) vm.go(Screen.Plan(ids))
         }
     }
 
@@ -261,15 +334,6 @@ private fun AddMealSheet(vm: AppViewModel, view: LocalView, day: LocalDate, slot
                         HorizontalDivider(color = colors.rule)
                     }
                 }
-                if (n > 0) {
-                    Row(Modifier.fillMaxWidth().clickable { shop = !shop }, verticalAlignment = Alignment.Top) {
-                        CheckBox(shop, { shop = !shop })
-                        Column(Modifier.padding(top = 12.dp)) {
-                            Text("Add the ingredients to my lists", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.ink)
-                            Text("Next you'll check what you need. Turn off for leftovers or a repeat.", fontSize = 14.sp, color = colors.ink2)
-                        }
-                    }
-                }
             }
             Field(
                 title, { title = it }, label = if (view.recipes.isNotEmpty()) "Or a meal without a recipe" else "Meal",
@@ -282,7 +346,6 @@ private fun AddMealSheet(vm: AppViewModel, view: LocalView, day: LocalDate, slot
                     n == 0 -> "Add ${title.trim()}"
                     else -> "Add $n recipe${if (n == 1) "" else "s"}" + if (typed) " and ${title.trim()}" else ""
                 },
-                sub = if (n > 0 && shop) "Then pick the ingredients you need" else null,
                 enabled = (n > 0 || typed) && !saving, busy = saving,
                 onClick = ::save, modifier = Modifier.fillMaxWidth(),
             )

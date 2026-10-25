@@ -27,7 +27,13 @@ val AppJson = Json {
 // ---------- what the server sends (see app/routes/api.py) ----------
 
 @Serializable
-data class Household(val id: Long, val name: String, val role: String = "member")
+data class Household(
+    val id: Long,
+    val name: String,
+    val role: String = "member",
+    /** The meal calendar's first day: 0 = Monday ... 6 = Sunday (the household state carries it). */
+    @SerialName("week_start") val weekStart: Int = 5,
+)
 
 @Serializable
 data class UserInfo(val id: Long, val username: String)

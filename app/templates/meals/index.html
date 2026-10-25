@@ -8,7 +8,7 @@
 {% endblock %}
 {% block content %}
 {% set hid = household.id %}
-<div class="narrow">
+<div class="narrow" id="meals" data-plan="/h/{{ hid }}/plan" data-back="{{ week_url }}" data-today="{{ today.isoformat() }}">
   <h1 class="page-title">Meals</h1>
   {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
 
@@ -21,6 +21,10 @@
     <a class="btn small icon-btn" href="{{ next_url }}" aria-label="Next week">{{ icon("chevron-right", 20, 2) }}</a>
     {% if not this_week %}<a class="btn small" href="{{ this_url }}">Today</a>{% endif %}
   </nav>
+  <div class="shop-hint" data-shop-hint hidden>
+    <p>Check the meals to buy ingredients for. Leave out leftovers and repeats; a recipe checked for two meals counts twice.</p>
+    <button type="button" class="linklike" data-shop-all>Select all</button>
+  </div>
 
   {% for day in days %}
   {% set iso = day.isoformat() %}
@@ -38,7 +42,7 @@
         {% if meals %}
         <ul class="meal-items">
           {% for m in meals %}
-          <li class="meal-item{{ ' is-recipe' if m.recipe }}">
+          <li class="meal-item{{ ' is-recipe' if m.recipe }}"{% if m.recipe %} data-recipe="{{ m.recipe_id }}" data-day="{{ iso }}"{% endif %}>
             {% if m.recipe %}
             <a class="meal-name is-recipe" href="/h/{{ hid }}/recipes/{{ m.recipe_id }}">{{ m.recipe.name }}</a>
             {% else %}
@@ -61,8 +65,13 @@
   </section>
   {% endfor %}
 
-  {% if shop_url %}
-  <a class="btn block mt-lg" href="{{ shop_url }}">{{ icon("list", 18) }}Add this week's ingredients to lists</a>
+  {% if has_recipes %}
+  {# meals.js turns this into a choice of meals; without it, the link goes to the picker with the meals still ahead. #}
+  <a class="btn block mt-lg" href="{{ shop_url or week_url }}" data-shop-start>{{ icon("list", 18) }}Choose meals to shop for</a>
+  <div class="sticky-actions shop-bar" data-shop-bar hidden>
+    <button type="button" class="btn primary grow apply-btn" data-shop-go><span class="apply-main"></span><span class="apply-sub">Next, check the ingredients you need</span></button>
+    <button type="button" class="btn" data-shop-cancel>Cancel</button>
+  </div>
   {% endif %}
 </div>
 
@@ -83,10 +92,6 @@
       </li>
       {% endfor %}
     </ul>
-    <label class="shop-toggle" data-meal-shop hidden>
-      <input type="checkbox" class="box" name="shop" value="1" checked>
-      <span><strong>Add the ingredients to my lists</strong><span>Next you'll check what you need. Turn off for leftovers or a repeat.</span></span>
-    </label>
     {% endif %}
     <label class="field">
       <span class="field-label">{{ "Or a meal without a recipe" if recipes else "Meal" }}</span>

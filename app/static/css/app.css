@@ -196,6 +196,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--i
 input[type="checkbox"]:not(.box) { width: auto; min-height: 0; }
 .inline-form { display: flex; gap: 8px; align-items: center; }
 .inline-form input, .inline-form select { flex: 1; min-width: 0; }
+.inline-label { flex: none; font-weight: 600; font-size: 15px; color: var(--ink-2); }
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
@@ -792,6 +793,28 @@ body:not(.lists-body) .toasts { bottom: calc(20px + env(safe-area-inset-bottom))
   color: var(--ink-2); font-weight: 600; font-size: 15px; cursor: pointer;
 }
 .meal-add:active, .meal-remove:active { transform: scale(0.95); }
+/* choosing meals to shop for */
+.shop-hint {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+  margin: 0 0 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-wash);
+}
+.shop-hint p { margin: 0; font-size: 15px; text-wrap: pretty; }
+.shop-hint .linklike { padding: 2px 0; }
+.choose-box { display: none; }
+.is-choosing .meal-remove, .is-choosing .meal-add { display: none; }
+.is-choosing .meal-item:not([data-recipe]) { opacity: 0.45; padding-right: 12px; }
+.is-choosing .meal-item[data-recipe] {
+  cursor: pointer; padding-right: 12px; background: var(--field); border-color: var(--rule-2);
+  transition: background-color 140ms, border-color 140ms;
+}
+.is-choosing .meal-item[data-recipe] .meal-name { color: var(--ink); pointer-events: none; }
+.is-choosing .choose-box {
+  display: inline-grid; place-content: center; flex: none; width: 20px; height: 20px; margin-right: 8px;
+  border: 2px solid var(--ink); border-radius: 6px; color: transparent;
+  transition: background-color 140ms, border-color 140ms;
+}
+.is-choosing .meal-item.is-chosen { background: var(--accent-wash); border-color: var(--accent); }
+.is-choosing .meal-item.is-chosen .choose-box { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .meal-sheet .meal-recipes { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
 .meal-sheet .row-item { min-height: 52px; }
 .meal-sheet .shop-toggle { padding-top: 4px; }

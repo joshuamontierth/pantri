@@ -50,6 +50,8 @@ class Household(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
+    # The meal calendar's first day of the week, 0 = Monday ... 6 = Sunday; empty means Saturday.
+    week_start: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     memberships: Mapped[list["Membership"]] = relationship(

@@ -596,9 +596,27 @@ def today():
         return datetime.now().date()
 
 
-def week_start(day):
-    """The Sunday that starts the week with this day in it."""
-    return day - timedelta(days=(day.weekday() + 1) % 7)
+WEEK_START_DEFAULT = 5  # Saturday (date.weekday(): 0 = Monday ... 6 = Sunday)
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def first_weekday(household):
+    """The household's first day of the week (date.weekday() numbering)."""
+    return WEEK_START_DEFAULT if household.week_start is None else household.week_start
+
+
+def week_start(day, first=WEEK_START_DEFAULT):
+    """The first day (first: 0 = Monday ... 6 = Sunday) of the week with this day in it."""
+    return day - timedelta(days=(day.weekday() - first) % 7)
+
+
+def set_week_start(db, membership, weekday):
+    """Which day the meal calendar's weeks start on, for everyone in the household."""
+    if not isinstance(weekday, int) or isinstance(weekday, bool) or not 0 <= weekday <= 6:
+        raise ActionError("Pick a day of the week.")
+    membership.household.week_start = weekday
+    db.commit()
+    broker.publish(membership.household_id, "meals")
 
 
 def parse_day(value):

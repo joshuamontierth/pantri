@@ -191,6 +191,9 @@ class Api(private val settings: Settings) {
 
     fun deleteMeal(hid: Long, id: Long) = send("DELETE", "/h/$hid/meals/$id", null, StateResult.serializer())
 
+    /** The meal calendar's first day of the week, 0 = Monday ... 6 = Sunday. */
+    fun setWeekStart(hid: Long, weekday: Int) = send("POST", "/h/$hid/week-start", obj("weekday" to weekday), StateResult.serializer())
+
     // ---------- a shopping list from photos or pasted text ----------
 
     /** Read a shopping list from photos (JPEG bytes, up to 4), or from typed text when there are none. */
