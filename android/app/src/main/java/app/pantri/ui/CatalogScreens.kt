@@ -234,7 +234,7 @@ private fun MergeSheet(vm: AppViewModel, view: LocalView, item: CatalogDto, onDi
     val others = view.catalog.filter { it.id != item.id && (query.isBlank() || it.name.contains(query.trim(), ignoreCase = true)) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = colors.sheet) {
-        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Merge ${item.name}", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink)
             Text(
                 "For the same thing saved twice, like Avocado and Avocados. Recipes and lists that use either one will use the one you keep, with its stores first.",

@@ -76,19 +76,20 @@ fun EditorScreen(vm: AppViewModel, view: LocalView, ed: EditorState, snackbar: S
     var importing by remember { mutableStateOf(false) }
     val title = if (ed.recipeId != null) "Edit recipe" else "New recipe"
     val catalogByLower = view.catalog.associateBy { it.name.lowercase() }
+    val keyboardCrowds = keyboardCrowdsForm()
 
     Scaffold(
         containerColor = colors.paper,
         topBar = { BackBar(if (ed.recipeId != null) ed.name.ifBlank { "Recipe" } else "Recipes", onBack = { vm.closeEditor() }) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            Row(Modifier.background(colors.paper).navigationBarsPadding().imePadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!keyboardCrowds) Row(Modifier.background(colors.paper).navigationBarsPadding().imePadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton("Save recipe", onClick = { vm.saveEditor() }, busy = ed.saving, modifier = Modifier.weight(1f))
                 OutlineButton("Cancel", onClick = { vm.closeEditor() }, modifier = Modifier.heightIn(min = 54.dp))
             }
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.scaffoldContent(padding, keyboardCrowds).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 PageTitle(title, Modifier.weight(1f))
                 if (ed.recipeId == null && ed.notice == null) OutlineButton("Import", small = true, icon = AppIcons.Import, onClick = { importing = true })
@@ -265,7 +266,7 @@ private fun PhotosOrTextSheet(vm: AppViewModel, recipeId: Long?, forList: Boolea
     val readLabel = if (forList) "Read list" else "Read recipe"
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = colors.sheet) {
-        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 when {
                     forList -> "Scan a shopping list"

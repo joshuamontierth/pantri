@@ -10,12 +10,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -40,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -50,6 +56,18 @@ import app.pantri.data.Connection
 import app.pantri.data.SyncStatus
 
 val RadiusShape = RoundedCornerShape(10.dp)
+
+/**
+ * The keyboard is up in a window too short (a phone turned sideways, a half-folded screen) to keep a bar
+ * pinned above it and still show the field being typed in. The bar steps aside until the keyboard closes.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun keyboardCrowdsForm(): Boolean = WindowInsets.isImeVisible && LocalConfiguration.current.screenHeightDp < 480
+
+/** A Scaffold's content. With the bottom bar stepped aside (see [keyboardCrowdsForm]) it makes room for the keyboard itself. */
+fun Modifier.scaffoldContent(padding: PaddingValues, keyboardCrowds: Boolean): Modifier =
+    padding(padding).then(if (keyboardCrowds) Modifier.consumeWindowInsets(padding).imePadding() else Modifier)
 
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {

@@ -315,7 +315,7 @@ private fun AddMealSheet(vm: AppViewModel, view: LocalView, day: LocalDate, slot
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = colors.sheet) {
-        Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Add to $label", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = colors.ink)
             error?.let { Alert(it) }
             if (view.recipes.isNotEmpty()) {

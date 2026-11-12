@@ -44,13 +44,14 @@ fun ScanReviewScreen(vm: AppViewModel, view: LocalView, review: ScanReview, snac
     val focus = LocalFocusManager.current
     val picked = review.rows.filter { it.include }
     val fresh = picked.count { it.isNew(view) }
+    val keyboardCrowds = keyboardCrowdsForm()
 
     Scaffold(
         containerColor = colors.paper,
         topBar = { BackBar("Lists", onBack = { vm.closeScanReview() }) },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            Box(Modifier.background(colors.paper).navigationBarsPadding().imePadding().padding(16.dp)) {
+            if (!keyboardCrowds) Box(Modifier.background(colors.paper).navigationBarsPadding().imePadding().padding(16.dp)) {
                 val perStore = picked.groupingBy { view.storeName(it.store(view)) }.eachCount()
                 PrimaryButton(
                     if (picked.isEmpty()) "Check the items you need" else "Add ${picked.size} item${if (picked.size == 1) "" else "s"} to lists",
@@ -66,7 +67,7 @@ fun ScanReviewScreen(vm: AppViewModel, view: LocalView, review: ScanReview, snac
             }
         },
     ) { padding ->
-        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
+        LazyColumn(Modifier.scaffoldContent(padding, keyboardCrowds).fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
             item {
                 PageTitle("Add from your list", Modifier.padding(top = 4.dp, bottom = 12.dp))
                 review.error?.let { Alert(it, modifier = Modifier.padding(bottom = 10.dp)) }

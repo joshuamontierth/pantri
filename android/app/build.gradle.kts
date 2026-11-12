@@ -31,8 +31,8 @@ android {
         applicationId = setting("ANDROID_APP_ID", "com.example.pantri")
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
         // Filled in on the login screen.
         buildConfigField("String", "SERVER_URL", "\"${setting("ANDROID_SERVER_URL", "")}\"")
     }
